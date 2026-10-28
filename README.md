@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/vanilla%20parity-100%25-F0795A" alt="Vanilla parity 100%">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-2A2470" alt="Linux, macOS and Windows">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3B2F7E" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-3B2F7E" alt="GNU GPL v3 licence"></a>
 </p>
 
 <p align="center">
@@ -162,7 +162,13 @@ Skins served over https show the default skin unless already cached; pack icons 
 
 ## Licence
 
-[MIT](LICENSE), for the project's original work only. Dependencies keep their own licences. Minecraft is a trademark of Mojang Synergies AB; Minecraft code and assets belong to Mojang and Microsoft and are covered by the [Minecraft EULA](https://www.minecraft.net/en-us/eula). Decompiled game source and prepared resources stay on your machine and are never published.
+[GNU GPL v3](LICENSE) (`GPL-3.0-only`), for this fork and for the code it builds on. Upstream
+Horizon, by Ludovic Marie and the Horizon contributors, was released under the [MIT licence](LICENSE-MIT);
+MIT lets a fork carry its work under the GPL, and MIT's copyright and permission notice stays in
+this tree, as MIT requires. Dependencies keep their own licences. Minecraft is a trademark of
+Mojang Synergies AB; Minecraft code and assets belong to Mojang and Microsoft and are covered by
+the [Minecraft EULA](https://www.minecraft.net/en-us/eula). Decompiled game source and prepared
+resources stay on your machine and are never published.
 
 Third-party credits and licenses: [Third-party notices](THIRD_PARTY_NOTICES.md).
 

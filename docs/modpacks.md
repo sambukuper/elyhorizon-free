@@ -1045,7 +1045,7 @@ What is missing, ranked by how much a player notices:
    and floating-block removal, and YUNG's decorations (Better Dungeons, Jungle Temples,
    Strongholds).
 4. **Structures that never generate:** the 27 Java types above. Repurposed Structures' mansions
-   and monuments are about 3,000 lines of LGPL layout code; whether to port them into this MIT
+   and monuments are about 3,000 lines of LGPL layout code; whether to port them into this GPL
    repository is a licence question.
 5. **The first start after installing or updating:** 25 to 35 s. Later starts are about four
    times vanilla's.

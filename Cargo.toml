@@ -47,7 +47,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2024"
-license = "MIT"
+license = "GPL-3.0-only"
 rust-version = "1.85"
 
 # Ports mirror vanilla's Java signatures, index loops and nested generic types

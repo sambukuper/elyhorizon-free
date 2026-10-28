@@ -5,7 +5,7 @@ version = "1.0.0"
 api = "0.1"
 description = "Warm light at sunrise and sunset, a soft glow around bright things and a gentle colour grade."
 authors = ["Horizon"]
-license = "MIT"
+license = "GPL-3.0-only"
 shared = ["common.wgsl"]
 
 [sky]
