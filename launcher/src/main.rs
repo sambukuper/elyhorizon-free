@@ -2537,6 +2537,36 @@ impl Launcher {
         }
         if let Some(e) = self.prepare_error.clone() {
             page = page.child(notice(e, &t));
+            // The usual reason is a Minecraft install the launcher did not find: choosing its
+            // folder is the fix, so the button sits under the message rather than a row down.
+            if !prepared && !self.preparing {
+                let mut actions = div().flex().items_center().gap(px(8.)).child(
+                    button(
+                        "prepare-choose",
+                        "Choose the Minecraft folder…",
+                        Kind::Secondary,
+                        &t,
+                    )
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.choose_folder(cx))),
+                );
+                if self.owner != Some(true) {
+                    actions = actions.child(
+                        button(
+                            "prepare-sign-in-download",
+                            "Sign in to download it",
+                            Kind::Ghost,
+                            &t,
+                        )
+                        .on_click(cx.listener(
+                            |this, _: &ClickEvent, _, cx| {
+                                this.sign_in_to_play();
+                                cx.notify();
+                            },
+                        )),
+                    );
+                }
+                page = page.child(actions);
+            }
         }
         page = page.child(rows);
         if let Some(console) = self.console_section(cx) {
