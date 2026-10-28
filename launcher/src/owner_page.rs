@@ -41,8 +41,8 @@ impl Launcher {
                     .child(format!("{}.", tr(account::NEEDS_OWNER))),
             )
             .child(text(theme::UI).text_color(t.muted).child(tr(
-                "Horizon plays offline with no account at all. Signing in adds online servers, \
-                 your own name and skin, and Horizon's own download of Minecraft from Mojang.",
+                "ElyHorizon plays offline with no account at all. Signing in adds online servers, \
+                 your own name and skin, and ElyHorizon's own download of Minecraft from Mojang.",
             )))
             .child(text(theme::UI).text_color(t.muted).child(tr(
                 "Your worlds, offline names and settings stay where they are.",

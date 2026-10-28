@@ -3,7 +3,7 @@
 //! `start`, `stop`, `config set`, `backup`, `restore`, `update`, `service`, and the control API the running
 //! supervisor serves on 127.0.0.1 for the live status, the log and console commands.
 //!
-//! The programs come from an installed Horizon version, laid out as `install.sh` lays them out
+//! The programs come from an installed ElyHorizon version, laid out as `install.sh` lays them out
 //! (`server-runtime/releases/<tag>`, `current`, `game-files/`), so `horizon-server update` and its
 //! rollback work on them unchanged. The game files are the player's own, copied from the version the
 //! launcher prepared: nothing of Mojang's is downloaded or shipped.
@@ -99,7 +99,7 @@ pub fn new_folder(name: &str) -> PathBuf {
     dir
 }
 
-// ----- The programs: an installed Horizon version, laid out as install.sh does ---------------------
+// ----- The programs: an installed ElyHorizon version, laid out as install.sh does ---------------------
 
 pub fn runtime_root() -> PathBuf {
     backend::data_dir().join("server-runtime")
@@ -132,12 +132,12 @@ pub fn game_files_ready() -> bool {
 pub fn can_host(tag: &str) -> Result<(), String> {
     if !backend::version_dir(tag).join(PROGRAM).is_file() {
         return Err(format!(
-            "Horizon {tag} has no server program. Install a newer version on the Versions page."
+            "ElyHorizon {tag} has no server program. Install a newer version on the Versions page."
         ));
     }
     if !backend::is_prepared(tag) {
         return Err(format!(
-            "Horizon {tag} isn't prepared yet: press Prepare on the Play page (it uses your own Minecraft {})",
+            "ElyHorizon {tag} isn't prepared yet: press Prepare on the Play page (it uses your own Minecraft {})",
             backend::game_version(tag)
         ));
     }
@@ -204,7 +204,7 @@ fn copy_release(from: &Path, to: &Path) -> std::io::Result<()> {
     for entry in fs::read_dir(from)? {
         let entry = entry?;
         let name = entry.file_name();
-        if name == ".local" || name == ".installed" || name == "Horizon.app" {
+        if name == ".local" || name == ".installed" || name == "ElyHorizon.app" {
             continue;
         }
         let target = to.join(&name);
@@ -588,9 +588,11 @@ pub fn create(spec: &NewServer, tag: Option<&str>, log: &dyn Fn(String)) -> Resu
     }
     if program().is_none() || !game_files_ready() {
         let tag = tag.ok_or_else(|| {
-            Problem::plain("Install a Horizon version first (Versions page), then prepare it.")
+            Problem::plain("Install an ElyHorizon version first (Versions page), then prepare it.")
         })?;
-        log(format!("Setting up the server programs from Horizon {tag}"));
+        log(format!(
+            "Setting up the server programs from ElyHorizon {tag}"
+        ));
         set_up(tag).map_err(|e| {
             if e.contains("prepared") {
                 Problem {

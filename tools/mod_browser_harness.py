@@ -5,9 +5,9 @@
 
 In a scratch game folder, as a player would through the Mods page (its CLI):
 
-1. `horizon-launcher mods search --kind mod TEXT` finds the mod on Modrinth;
-2. `horizon-launcher mods check SLUG` downloads its jar (checksum checked) and says Works or Partly;
-3. `horizon-launcher mods install SLUG` ports it into horizon-mods/ and turns it on;
+1. `elyhorizon-launcher mods search --kind mod TEXT` finds the mod on Modrinth;
+2. `elyhorizon-launcher mods check SLUG` downloads its jar (checksum checked) and says Works or Partly;
+3. `elyhorizon-launcher mods install SLUG` ports it into horizon-mods/ and turns it on;
 4. the game opens a survival world with it (horizon-ctl, offscreen), and
 5. a ported block item is given, held, and placed: the world then holds the mod's block;
 6. a ported recipe with vanilla ingredients is crafted on a crafting table: the result slot shows
@@ -17,7 +17,7 @@ It also times the install and the world's load with the mod against the same wor
 (a ported mod must not slow a game that doesn't use it; this measures what one that does costs).
 Prints one JSON line per step and a summary; exits 1 when a step fails.
 
-Needs the launcher (launcher/target/debug/horizon-launcher, built with
+Needs the launcher (launcher/target/debug/elyhorizon-launcher, built with
 `--features gpui/runtime_shaders` on macOS), the game and horizon-ctl
 (target/fast/horizon-client, target/fast/horizon-ctl, or --bin DIR) and the prepared resources in
 .local/horizon-client/26.3. Downloads from Modrinth.
@@ -152,7 +152,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mod", default="macaws-fences-and-walls", help="Modrinth slug of a Works or Partly mod")
     ap.add_argument("--query", default="macaw", help="the search text that finds it")
-    ap.add_argument("--launcher", default=str(ROOT / "launcher/target/debug/horizon-launcher"))
+    ap.add_argument("--launcher", default=str(ROOT / "launcher/target/debug/elyhorizon-launcher"))
     ap.add_argument("--bin", default=str(ROOT / "target/fast"), help="folder with horizon-client and horizon-ctl")
     ap.add_argument("--resources", default=str(ROOT / ".local/horizon-client/26.3"))
     ap.add_argument("--keep", action="store_true", help="keep the scratch game folder")

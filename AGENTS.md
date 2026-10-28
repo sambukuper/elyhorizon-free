@@ -12,7 +12,7 @@ Feature → files → harness for the most-changed areas: [docs/architecture.md]
   folders in `HORIZON_HOME` (the game's data), `HORIZON_LAUNCHER_HOME`, `XDG_DATA_HOME` and
   `XDG_CONFIG_HOME`, plus `HORIZON_LAUNCHER_NO_SELF_UPDATE=1` and `HORIZON_NO_AUDIO=1`, and, for the
   launcher, `HORIZON_LAUNCHER_TRASH`, `HORIZON_LAUNCHER_CLIPBOARD` and `HORIZON_LAUNCHER_DESKTOP` pointing into the scratch home. Never write to
-  `~/.local/share/{applications,horizon,horizon-launcher}` or `~/.local/bin`.
+  `~/.local/share/{applications,horizon,elyhorizon-launcher}` or `~/.local/bin`.
 - **Mark what an agent posts.** A PR body starts with a line naming whose agent opened it and with what.
   Ludovic's agents write `> 🤖 Opened by Ludovic's AI agent (Claude), not by Ludovic himself.`, and a
   contributor's agent names its own person and tool (issues: "Filed by", reviews: "Review by"). Every

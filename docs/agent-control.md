@@ -8,7 +8,7 @@ Players read [Control Horizon with your AI agent](https://playhorizon.dev/docs/a
 
 The command lists are generated, so they can't drift:
 
-- [launcher-commands.md](launcher-commands.md): every `horizon-launcher` command, its arguments
+- [launcher-commands.md](launcher-commands.md): every `elyhorizon-launcher` command, its arguments
   and its MCP tool. It comes from the CLI's clap definition (`cli_tools::markdown`), and the
   launcher test `the_launcher_reference_is_up_to_date` fails when it is stale or a tool is missing.
 - [horizon-ctl-commands.md](horizon-ctl-commands.md): every `horizon-ctl` command, its MCP tool
@@ -22,14 +22,14 @@ The command lists are generated, so they can't drift:
 | Game control socket | `horizon-client --control` / `--control-socket PATH`, or Agent Control on in Horizon Settings > AI Agent (`crates/horizon-client/src/control.rs`; commands in `src/game/control.rs`, `agent.rs`, `ui_control.rs`, `saves_control.rs` and friends) | text line in, one JSON line out; Unix socket, or localhost TCP and a token where there is none |
 | `horizon-ctl` | `crates/horizon-client/src/bin/horizon-ctl/` | CLI over the socket; one table of commands (`commands.rs`) gives the help, the argument checks, the MCP tools and the reference |
 | `horizon-ctl mcp` | same | MCP over stdio, one tool per command of the table |
-| Launcher CLI | `launcher/src/cli.rs` | `horizon-launcher <command> [--json]` |
-| Launcher MCP | `launcher/src/mcp.rs`, `cli_tools.rs`, `game_tools.rs` | `horizon-launcher mcp` (stdio): every CLI command as a tool, the session tools, and the game's tools as `game_*` |
-| Connecting | `launcher/src/agents.rs`, `agents_page.rs`; `src/game/agent_settings.rs` | `horizon-launcher agent-config`; Settings > AI in the launcher; Horizon Settings > AI Agent in the game |
+| Launcher CLI | `launcher/src/cli.rs` | `elyhorizon-launcher <command> [--json]` |
+| Launcher MCP | `launcher/src/mcp.rs`, `cli_tools.rs`, `game_tools.rs` | `elyhorizon-launcher mcp` (stdio): every CLI command as a tool, the session tools, and the game's tools as `game_*` |
+| Connecting | `launcher/src/agents.rs`, `agents_page.rs`; `src/game/agent_settings.rs` | `elyhorizon-launcher agent-config`; Settings > AI in the launcher; Horizon Settings > AI Agent in the game |
 | No AI | `crates/horizon-core/src/no_ai.rs` | `noAi:true` in `<game home>/horizon-extras.txt`, read by every surface |
 
 ## One MCP server for everything
 
-An agent adds one server, `horizon-launcher mcp`. It holds:
+An agent adds one server, `elyhorizon-launcher mcp`. It holds:
 
 - **The launcher's CLI, generated.** `cli_tools.rs` walks the clap definition. Each command is a
   tool named after its words (`mods search` is `mods_search`). Its arguments are the command's,
@@ -53,8 +53,8 @@ on its own, for a game started by hand or by a script.
 ## Inventory, before and after
 
 Before is `main` at 2026-10-23, before #1342, #1343, #1344, #1345 and #1353. After is with
-them. CLI is `horizon-launcher` for the launcher and `horizon-ctl` for the game. MCP is
-`horizon-launcher mcp` (the game's tools as `game_*`) and `horizon-ctl mcp`. **part** means only
+them. CLI is `elyhorizon-launcher` for the launcher and `horizon-ctl` for the game. MCP is
+`elyhorizon-launcher mcp` (the game's tools as `game_*`) and `horizon-ctl mcp`. **part** means only
 through a generic command (`ui` and `click` by widget, or a raw socket line that horizon-ctl
 passes on without checking it).
 
@@ -134,14 +134,14 @@ its working directory, which is that folder. `horizon_core::no_ai` reads and wri
 - `REFUSAL` is the one line every surface prints.
 
 The switch is in three places: Settings > AI in the launcher, Horizon Settings in the game
-(`Item::NoAi`), and `horizon-launcher no-ai on|off`. When it is on:
+(`Item::NoAi`), and `elyhorizon-launcher no-ai on|off`. When it is on:
 
 | Surface | What happens |
 | --- | --- |
 | Game | opens no control socket, even with `--control` (it logs the refusal); Horizon Settings hides AI Agent...; turning it on in a running game closes the socket at once |
 | `horizon-ctl` | every command refuses: exit status 4, `{"error": REFUSAL, "kind": "denied"}` |
 | `horizon-ctl mcp` | refuses to start (exit 4, REFUSAL on stderr); a session already running refuses each call |
-| `horizon-launcher mcp` | refuses to start; a running session answers each `tools/call` with error -32000 and REFUSAL |
+| `elyhorizon-launcher mcp` | refuses to start; a running session answers each `tools/call` with error -32000 and REFUSAL |
 | Launcher CLI | `mcp` and `agent-config` are hidden from the help and refuse |
 | Launcher window | Settings > AI shows only the No AI switch, without Connect an AI agent |
 | Companion (#1068) | uses the same switch (see horizon-parity companion-notes.md) |
@@ -160,7 +160,7 @@ turn the switch off.
     `claude mcp add --scope user horizon -- <exe> mcp`, `codex mcp add horizon -- <exe> mcp`;
   - **Test the connection** (`agents::self_test`) starts `<exe> mcp`, lists its tools and says
     how many answered.
-  - `horizon-launcher agent-config [--client ID] [--json] [--test]` prints the same thing.
+  - `elyhorizon-launcher agent-config [--client ID] [--json] [--test]` prints the same thing.
 - **Game, Horizon Settings > AI Agent:**
   - **Agent Control** (`agentControl` in horizon-extras.txt, off by default) opens the default
     endpoint (`$HORIZON_CONTROL`, else `horizon-control.sock` in the runtime directory) in a game
@@ -281,7 +281,7 @@ turn the switch off.
   - `manage`: worlds, servers, effects, books, LAN, the options pages and `confirm`;
   - `no-ai`: every surface refuses;
   - `setting`: Agent Control on opens the endpoint, the AI Agent page, Copy, and off closes it.
-- **`tools/launcher_mcp_e2e.py`** drives `horizon-launcher mcp`: the generated tools, `play` and
+- **`tools/launcher_mcp_e2e.py`** drives `elyhorizon-launcher mcp`: the generated tools, `play` and
   the `game_*` tools, `confirm`, `agent-config` and `--test`, and No AI.
 
 ## Later

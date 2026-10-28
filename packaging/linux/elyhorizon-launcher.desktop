@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ElyHorizon
+GenericName=Game launcher
+Comment=Install, prepare and play ElyHorizon, Minecraft: Java Edition 26.3 rewritten in Rust
+Exec=elyhorizon-launcher
+Icon=horizon
+Terminal=false
+Categories=Game;
+StartupWMClass=elyhorizon-launcher

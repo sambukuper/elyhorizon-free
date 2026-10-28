@@ -97,7 +97,7 @@ pub struct Step {
 }
 
 /// What installing `project` takes, dependencies first, checked before any byte is downloaded:
-/// every file runs in Horizon and has a version to install.
+/// every file runs in ElyHorizon and has a version to install.
 pub fn plan(source: &dyn Source, project: &Project, everything: bool) -> Result<Vec<Step>, String> {
     if project.kind == Kind::Modpack {
         return Err(format!(
@@ -131,19 +131,22 @@ fn add(
         return Err(format!("{}'s dependencies go too deep.", project.title));
     }
     if let Support::No(why) = project.support() {
-        return Err(format!("{} doesn't run in Horizon: {why}", project.title));
+        return Err(format!(
+            "{} doesn't run in ElyHorizon: {why}",
+            project.title
+        ));
     }
     let versions = source.versions(&project)?;
     let Some(version) = pick(project.kind, &versions, everything).cloned() else {
         return Err(match versions.iter().find_map(|v| v.blocked.clone()) {
             Some(why) => format!("{} can't be installed from here: {why}", project.title),
-            None => format!("{} has no version Horizon runs.", project.title),
+            None => format!("{} has no version ElyHorizon runs.", project.title),
         });
     };
     for id in &version.required {
         let needed = source.project(id).map_err(|_| {
             format!(
-                "{} needs {id} on {}, which isn't a pack Horizon loads (a Java mod?).",
+                "{} needs {id} on {}, which isn't a pack ElyHorizon loads (a Java mod?).",
                 project.title,
                 source.id().label()
             )
@@ -170,7 +173,7 @@ pub fn install(
     home: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<Vec<Entry>, String> {
-    if project.source == SourceId::Horizon {
+    if project.source == SourceId::ElyHorizon {
         return super::horizon::install(project, home, progress);
     }
     if project.kind == Kind::Mod {
@@ -251,7 +254,7 @@ pub fn remove(home: &Path, name: &str) -> Result<Entry, String> {
         .lookup(name)
         .cloned()
         .ok_or_else(|| format!("{name} wasn't installed by the browser."))?;
-    if entry.kind == Kind::Mod && entry.source != SourceId::Horizon {
+    if entry.kind == Kind::Mod && entry.source != SourceId::ElyHorizon {
         super::java::remove(home, &entry)?;
     } else {
         match fs::remove_file(home.join(&entry.file)) {
@@ -260,7 +263,9 @@ pub fn remove(home: &Path, name: &str) -> Result<Entry, String> {
             Err(e) => return Err(format!("{}: {e}", entry.file)),
         }
     }
-    if let Some(id) = super::horizon::mod_id(&entry).filter(|_| entry.source == SourceId::Horizon) {
+    if let Some(id) =
+        super::horizon::mod_id(&entry).filter(|_| entry.source == SourceId::ElyHorizon)
+    {
         super::java::set_enabled(home, id, false)?;
     }
     installed
@@ -301,12 +306,12 @@ pub struct DataPackInstall {
     pub pack: crate::datapacks::DataPack,
     /// Its version's number.
     pub number: String,
-    /// What of it runs in Horizon.
+    /// What of it runs in ElyHorizon.
     pub coverage: crate::datapacks::Coverage,
 }
 
 /// Downloads a project's data pack (checksum checked) into the world folder `world`, under a
-/// free name. Refused when nothing in it runs in Horizon yet. It isn't recorded with the
+/// free name. Refused when nothing in it runs in ElyHorizon yet. It isn't recorded with the
 /// browser's installs: the world's data pack list (Home, `worlds datapack-list`) has it.
 pub fn install_datapack(
     source: &dyn Source,
@@ -333,7 +338,7 @@ pub fn install_datapack(
     })?;
     let file = version.file().expect("pick keeps versions with a file");
     let folder = std::env::temp_dir().join(format!(
-        "horizon-launcher-datapack-{}-{}",
+        "elyhorizon-launcher-datapack-{}-{}",
         std::process::id(),
         version.id
     ));
@@ -341,8 +346,8 @@ pub fn install_datapack(
         let coverage = crate::datapacks::coverage(&zip)?;
         if coverage.read.is_empty() {
             return Err(format!(
-                "{} would change nothing in Horizon yet: it has no functions, predicates or item \
-                 modifiers, and Horizon doesn't read its {} yet.",
+                "{} would change nothing in ElyHorizon yet: it has no functions, predicates or item \
+                 modifiers, and ElyHorizon doesn't read its {} yet.",
                 project.title,
                 coverage.not_read()
             ));

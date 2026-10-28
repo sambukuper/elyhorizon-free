@@ -8,7 +8,7 @@ name: launcher
 # feature. The version and the tag are given to the build (HORIZON_LAUNCHER_VERSION, HORIZON_LAUNCHER_TAG): no bump
 # commits.
 # Never marked latest. Pushes to launcher branches only build. RELEASES_PAUSED=1 stops releases.
-# macOS: with the repository variable MACOS_SIGN_IDENTITY set, Horizon.app and the .dmg are signed with
+# macOS: with the repository variable MACOS_SIGN_IDENTITY set, ElyHorizon.app and the .dmg are signed with
 # Developer ID, notarized and stapled, from the runner's signing keychain (packaging/macos/README.md);
 # unset (forks), they are signed ad hoc.
 #   gh workflow run launcher --ref <branch>                    # dry run: builds everything, publishes nothing
@@ -99,16 +99,16 @@ jobs:
         include:
           - name: linux
             os: ubuntu-22.04
-            asset: horizon-launcher-linux-x86_64.tar.gz
-            binary: horizon-launcher
+            asset: elyhorizon-launcher-linux-x86_64.tar.gz
+            binary: elyhorizon-launcher
           - name: macos
             mac: true
-            asset: horizon-launcher-macos-arm64.zip
-            binary: horizon-launcher
+            asset: elyhorizon-launcher-macos-arm64.zip
+            binary: elyhorizon-launcher
           - name: windows
             os: windows-latest
-            asset: horizon-launcher-windows-x64.zip
-            binary: horizon-launcher.exe
+            asset: elyhorizon-launcher-windows-x64.zip
+            binary: elyhorizon-launcher.exe
             # The C runtime linked in: without it the launcher asks for VCRUNTIME140.dll,
             # which only the Visual C++ redistributable installs.
             rustflags: -C target-feature=+crt-static
@@ -117,7 +117,7 @@ jobs:
     timeout-minutes: ${{ matrix.mac && 60 || 40 }}
     env:
       RUSTFLAGS: ${{ matrix.rustflags }}
-      # Horizon's Azure app for Microsoft sign-in (docs/microsoft-account.md): a repository
+      # ElyHorizon's Azure app for Microsoft sign-in (docs/microsoft-account.md): a repository
       # variable, not a secret. Unset, the launcher says sign-in is not configured.
       HORIZON_MSA_CLIENT_ID: ${{ vars.HORIZON_MSA_CLIENT_ID }}
       # The mod browser's CurseForge source (docs/mod-browser.md#curseforge): a repository secret. Unset, the
@@ -167,7 +167,7 @@ jobs:
           out=$(target/release/${{ matrix.binary }} --version)
           echo "$out"
           expected="${HORIZON_LAUNCHER_VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}"
-          [[ "$out" == "horizon-launcher $expected" ]] || { echo "::error::expected horizon-launcher $expected"; exit 1; }
+          [[ "$out" == "elyhorizon-launcher $expected" ]] || { echo "::error::expected elyhorizon-launcher $expected"; exit 1; }
       - name: Only system libraries
         run: |
           file=target/release/${{ matrix.binary }}
@@ -182,7 +182,7 @@ jobs:
           HORIZON_GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          export HORIZON_LAUNCHER_HOME="${RUNNER_TEMP//\\//}/horizon-launcher-smoke"
+          export HORIZON_LAUNCHER_HOME="${RUNNER_TEMP//\\//}/elyhorizon-launcher-smoke"
           export HORIZON_HOME="$HORIZON_LAUNCHER_HOME/game"
           rm -rf "$HORIZON_LAUNCHER_HOME"
           launcher="$PWD/target/release/${{ matrix.binary }}"
@@ -218,12 +218,12 @@ jobs:
         run: |
           rm -rf dist out && mkdir -p out
           if [[ "$RUNNER_OS" == "macOS" ]]; then
-            # Horizon.app, zipped (self-update) and in a .dmg (installer), signed (and notarized with
+            # ElyHorizon.app, zipped (self-update) and in a .dmg (installer), signed (and notarized with
             # Developer ID): packaging/macos.
             python3 -m venv "$RUNNER_TEMP/dmg" && "$RUNNER_TEMP/dmg/bin/pip" install --quiet dmgbuild==1.6.5
             version=${HORIZON_LAUNCHER_VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}
             DMGBUILD="$RUNNER_TEMP/dmg/bin/dmgbuild" ../packaging/macos/package.sh target/release/${{ matrix.binary }} "$version" out
-            rm -rf out/Horizon.app
+            rm -rf out/ElyHorizon.app
           else
             mkdir -p dist
             cp target/release/${{ matrix.binary }} dist/
@@ -260,7 +260,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
-          pattern: horizon-launcher-*
+          pattern: elyhorizon-launcher-*
           merge-multiple: true
       - name: Sign the checksums (SHA256SUMS, SHA256SUMS.sig)
         env:
@@ -268,7 +268,7 @@ jobs:
           RELEASE_SIGNING_KEY_NEXT: ${{ secrets.RELEASE_SIGNING_KEY_NEXT }}
           EPHEMERAL: ${{ needs.decide.outputs.dry_run == 'true' && 'yes' || '' }}
           TAG: ${{ needs.decide.outputs.tag }}
-        run: bash tools/ci/sign_release.sh "$TAG" dist/horizon-launcher-*
+        run: bash tools/ci/sign_release.sh "$TAG" dist/elyhorizon-launcher-*
       - uses: actions/upload-artifact@v4
         with:
           name: signature
@@ -310,7 +310,7 @@ jobs:
         run: |
           key=(); [[ -n "$EPHEMERAL" ]] && key=(--key "$(cat dist/ephemeral.pub)")
           cargo run --locked --quiet -p horizon-release-sign -- verify --tag "$TAG" --publishing "${key[@]}" dist
-      # Never marked latest: Horizon's own releases stay the repository's latest.
+      # Never marked latest: ElyHorizon's own releases stay the repository's latest.
       - name: Publish ${{ needs.decide.outputs.tag }}
         if: needs.decide.outputs.dry_run != 'true'
         env:
@@ -319,7 +319,7 @@ jobs:
         run: |
           signature=(); [[ -f dist/SHA256SUMS.sig ]] && signature=(dist/SHA256SUMS.sig)
           gh release create "$TAG" --target "${{ needs.decide.outputs.head }}" --title "$(cat notes/title.txt)" \
-            --notes-file notes/body.md --latest=false dist/horizon-launcher-* dist/SHA256SUMS "${signature[@]}"
+            --notes-file notes/body.md --latest=false dist/elyhorizon-launcher-* dist/SHA256SUMS "${signature[@]}"
       - name: Dry run, the release that would be published
         if: needs.decide.outputs.dry_run == 'true'
         run: |

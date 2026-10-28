@@ -30,7 +30,8 @@ fn selected_jdk_reaches_external_preparers() {
         return;
     }
 
-    let root = std::env::temp_dir().join(format!("horizon-launcher-java-{}", std::process::id()));
+    let root =
+        std::env::temp_dir().join(format!("elyhorizon-launcher-java-{}", std::process::id()));
     fs::create_dir_all(&root).unwrap();
     let executable =
         |bin: &Path, name: &str| bin.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));

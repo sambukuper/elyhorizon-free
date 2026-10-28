@@ -1056,7 +1056,7 @@ What is missing, ranked by how much a player notices:
 
 2026-10-22, Mac mini M4 Pro (offscreen, a debug launcher, release-profile `horizon-port-pack` and game), while
 other sessions kept the CPU at 85 to 93 %, so times are upper bounds. The two Modrinth packs were imported with
-`horizon-launcher mods install <slug>` (the browser's Import), ATM10 from its CurseForge zip with `modpack import`
+`elyhorizon-launcher mods install <slug>` (the browser's Import), ATM10 from its CurseForge zip with `modpack import`
 (CurseForge support is coming soon), then each ported with `--resources` for 26.3 and opened as a survival
 world with every ported mod on (horizon-ctl `launch --dev-mod ...`, from a scratch script).
 

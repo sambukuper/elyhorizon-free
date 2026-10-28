@@ -86,7 +86,7 @@ PLAYERS = ('<h3>Want to play? Download the <a href="https://playhorizon.dev">Hor
            "own copy of Minecraft: Java Edition. The files below are what the launcher installs, and the dedicated "
            "server for people who host one.</p>")
 LAUNCHER_FOOTER = ("Your launcher updates itself. New here? Download the archive for your system below, extract it, "
-                   "and run `horizon-launcher`. Website: https://playhorizon.dev")
+                   "and run `elyhorizon-launcher`. Website: https://playhorizon.dev")
 DISCLAIMER = "Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft."
 # An open issue with this label holds every game release (docs/release-flow.md). Only people who can triage the
 # repository can add it, and the issue's text is never read: its author could edit it afterwards.

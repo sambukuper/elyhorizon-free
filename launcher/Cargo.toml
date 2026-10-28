@@ -1,11 +1,21 @@
 [package]
-name = "horizon-launcher"
-version = "0.2.0"
+name = "elyhorizon-launcher"
+version = "0.3.0"
 edition = "2021"
 license = "GPL-3.0-only"
-description = "Downloads, prepares and starts Horizon builds"
+description = "Downloads, prepares and starts ElyHorizon builds"
 
 [workspace]
+
+# The library keeps the modules' own name, so every `horizon_launcher::…` path stays as it is.
+[lib]
+name = "horizon_launcher"
+path = "src/lib.rs"
+
+# The window, the command line and the MCP server.
+[[bin]]
+name = "elyhorizon-launcher"
+path = "src/main.rs"
 
 [dependencies]
 gpui = "0.2.2"

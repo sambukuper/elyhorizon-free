@@ -1,5 +1,5 @@
 //! Modpacks: import a Java modpack (a Modrinth `.mrpack`, a CurseForge zip, an instance folder),
-//! show what Horizon runs of it, port that on this computer from the player's own downloads, and
+//! show what ElyHorizon runs of it, port that on this computer from the player's own downloads, and
 //! play it as a profile of its own (docs/modpacks.md).
 //!
 //! Each pack lives in `ports/<slug>/` in the game's home: the work folder `horizon-port-pack`
@@ -214,7 +214,7 @@ pub fn import_and_port(
 pub fn outcome(pack: &Imported) -> String {
     let not = pack.count(Status::NotYet);
     format!(
-        "{} is imported{}: {} of its {} files play in Horizon ({} ported, {} partly), {} don't \
+        "{} is imported{}: {} of its {} files play in ElyHorizon ({} ported, {} partly), {} don't \
          yet, {} aren't needed{}. Its list says why.",
         pack.title(),
         if pack.mods.is_empty() {
@@ -253,7 +253,7 @@ pub fn profile_home(work: &Path) -> PathBuf {
 
 /// Turns the game's command into this pack's profile: its own home (the player's options.txt
 /// copied in the first time, so keys and video settings carry over) and its carried-over mods.
-/// A modpack from Horizon's registry (`horizon-packs/<id>/`) plays its own profile the same way.
+/// A modpack from ElyHorizon's registry (`horizon-packs/<id>/`) plays its own profile the same way.
 pub fn apply_profile(cmd: &mut Command, work: &Path) -> Result<(), String> {
     if horizon_pack::is_pack(work) {
         return horizon_pack::apply(cmd, work);
@@ -291,7 +291,8 @@ mod tests {
     #[test]
     fn jars_only_curseforge_serves_are_left_off_as_coming_soon() {
         use horizon_port_pack::fetch::Outcome;
-        let work = std::env::temp_dir().join(format!("horizon-launcher-cf-{}", std::process::id()));
+        let work =
+            std::env::temp_dir().join(format!("elyhorizon-launcher-cf-{}", std::process::id()));
         let _ = fs::remove_dir_all(&work);
         fs::create_dir_all(&work).unwrap();
         pipeline::write_json(&work.join("pack.json"), &Pack::default()).unwrap();
@@ -319,7 +320,7 @@ mod tests {
     #[test]
     fn a_profile_has_its_own_home_and_mods() {
         let root =
-            std::env::temp_dir().join(format!("horizon-launcher-pack-{}", std::process::id()));
+            std::env::temp_dir().join(format!("elyhorizon-launcher-pack-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let work = root.join("ports/small");
         let mut cmd = Command::new("true");

@@ -28,7 +28,7 @@ fn fixture() -> PathBuf {
 fn launch(root: &Path) -> Child {
     let inherited_path = std::env::var_os("PATH").unwrap();
     let paths = std::iter::once(root.join("probes")).chain(std::env::split_paths(&inherited_path));
-    horizon_launcher::process::command(env!("CARGO_BIN_EXE_horizon-launcher"))
+    horizon_launcher::process::command(env!("CARGO_BIN_EXE_elyhorizon-launcher"))
         .current_dir(root)
         .env("PATH", std::env::join_paths(paths).unwrap())
         .env("HORIZON_HOME", root.join("game"))

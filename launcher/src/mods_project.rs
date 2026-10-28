@@ -423,7 +423,7 @@ impl Launcher {
             self.mods.checks.get(&(p.source, p.id.clone())),
             None | Some(Checking::Running)
         ) && p.kind == PackKind::Mod
-            && p.source != SourceId::Horizon
+            && p.source != SourceId::ElyHorizon
             && p.support().installable();
         let mut action = div().flex().items_center().gap(px(8.)).child(
             caps(if checking {
@@ -492,7 +492,7 @@ impl Launcher {
             .child(div().flex().child(back))
             .child(head);
         // Registry projects are rated on the site, signed in with GitHub (one rating per account).
-        if p.source == SourceId::Horizon {
+        if p.source == SourceId::ElyHorizon {
             let url = browser::horizon::rate_url(&p.id);
             page = page.child(
                 div()

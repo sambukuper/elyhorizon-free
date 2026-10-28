@@ -29,7 +29,7 @@ Horizon is Minecraft: Java Edition 26.3 rewritten in Rust: a native game that re
 
 ## Download
 
-Horizon is installed through **the Horizon launcher**. Get it from [playhorizon.dev](https://playhorizon.dev) (the Download button picks your system) or from [the launcher releases](https://github.com/horizon-rust/horizon/releases?q=launcher-v&expanded=true), for Linux x86-64, macOS on Apple Silicon or Windows x64. The launcher installs and updates the game, prepares its files from your own copy of Minecraft, and updates itself.
+Horizon is installed through **the ElyHorizon launcher**. Get it from [playhorizon.dev](https://playhorizon.dev) (the Download button picks your system) or from [the launcher releases](https://github.com/horizon-rust/horizon/releases?q=launcher-v&expanded=true), for Linux x86-64, macOS on Apple Silicon or Windows x64. The launcher installs and updates the game and prepares its files from your own copy of Minecraft.
 
 **You need** your own copy of Minecraft: Java Edition 26.3, played once (the official launcher, Prism, MultiMC and other launchers all work), so the launcher can prepare the game files from it; a Java 25 runtime, for the one-time preparation; and a GPU with Vulkan on Linux and Windows, or any Apple Silicon Mac. No account is needed to play offline: pick a name, or let the game make one up. A Microsoft account that owns Minecraft: Java Edition adds online servers, your own skin, and the launcher's own download of the game ([Microsoft account](docs/microsoft-account.md)). Step by step, with macOS's first-open prompt and the first launch: [Install and first launch](https://playhorizon.dev/docs/install).
 

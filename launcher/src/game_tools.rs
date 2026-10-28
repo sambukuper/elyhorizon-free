@@ -82,7 +82,7 @@ impl GameTools {
         tools.rpc(
             "initialize",
             json!({ "protocolVersion": crate::mcp::PROTOCOL, "capabilities": {},
-                    "clientInfo": { "name": "horizon-launcher", "version": backend::VERSION } }),
+                    "clientInfo": { "name": "elyhorizon-launcher", "version": backend::VERSION } }),
         )?;
         tools.send(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }))?;
         let listed = tools.rpc("tools/list", json!({}))?;

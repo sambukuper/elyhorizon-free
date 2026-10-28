@@ -22,7 +22,7 @@ serves the same commands as MCP tools. The launcher's MCP server offers them too
 1. Build `horizon-ctl` (`cargo build --profile fast -p horizon-client`), then
    `horizon-ctl --socket $PWD/ctl.sock launch --world W --creative --wait --resources <prepared files>`.
 2. `horizon-ctl --socket … state`, `keys`, `turn`, `command`, `screenshot`, `quit`.
-3. For an agent: `horizon-ctl mcp`, or the launcher's `horizon-launcher mcp` with `agent-config` to connect a client
+3. For an agent: `horizon-ctl mcp`, or the launcher's `elyhorizon-launcher mcp` with `agent-config` to connect a client
    ([launcher-commands.md](../launcher-commands.md)).
 
 ## Reference

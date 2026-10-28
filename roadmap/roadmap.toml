@@ -327,7 +327,7 @@ dev = """Redo the comparison after the current performance work (#1073); reliabi
 across releases (an automatic comparison of each release with the last, on a timeline), more report fields \
 (server TPS and MSPT, power, battery drain, temperature, throttling) and more hardware (a MacBook on \
 battery, low-end laptops, community reports). Players' reports come in through `--benchmark` and \
-`horizon-launcher data benchmark` (docs/benchmark.md)."""
+`elyhorizon-launcher data benchmark` (docs/benchmark.md)."""
 links = ["#1073", "#1346", "#1749", "docs/benchmark.md"]
 
 [[item]]
@@ -1010,7 +1010,7 @@ status = "help-wanted"
 area = "performance"
 plain = """Run Horizon's built-in benchmark and share the report: every new computer makes the performance work \
 more accurate. No coding needed."""
-dev = """`horizon-launcher play --arg=--benchmark --arg=standard` writes a JSON report; `horizon-launcher data \
+dev = """`elyhorizon-launcher play --arg=--benchmark --arg=standard` writes a JSON report; `elyhorizon-launcher data \
 benchmark <report>` shows what would be sent and uploads it (playhorizon.dev/docs/performance). Results from three \
 installs with the same hardware appear on the Benchmarks page. Example: #1711."""
 links = ["https://playhorizon.dev/docs/performance", "#1711"]

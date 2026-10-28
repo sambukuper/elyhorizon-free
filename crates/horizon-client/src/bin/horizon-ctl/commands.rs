@@ -509,7 +509,7 @@ pub fn markdown() -> String {
          crates/horizon-client/src/bin/horizon-ctl/commands.rs: edit the table, then regenerate. -->\n\
          # horizon-ctl commands\n\n\
          Every command `horizon-ctl` takes, its MCP tool in `horizon-ctl mcp` (the launcher's \
-         `horizon-launcher mcp` offers the same tools as `game_<tool>`, all but `launch`) and its \
+         `elyhorizon-launcher mcp` offers the same tools as `game_<tool>`, all but `launch`) and its \
          arguments. Positional arguments come first, in order; `--flags` after them. \
          `horizon-ctl help --game` lists the game's own commands, test hooks included. \
          Design rules and the full inventory: [agent-control.md](agent-control.md).\n",

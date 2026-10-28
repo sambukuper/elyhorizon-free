@@ -137,7 +137,7 @@ same name the player put there is never overwritten.
   pack still has to be turned on in the game's Resource Packs screen, as in vanilla, and a shader pack picked in
   the game's Shader Packs page.
 - **Update** installs the newer version and removes the old file.
-- **Update all** does the same for each pack with a newer version (`horizon-launcher mods update` with no pack name).
+- **Update all** does the same for each pack with a newer version (`elyhorizon-launcher mods update` with no pack name).
 - **Remove** deletes the file and its entry. Packs installed as dependencies stay.
 - **A modpack** is downloaded (checked the same way) into `ports/downloads/`, imported, and ported straight away
   for the selected version when it is prepared (`modpacks::import_and_port`): the jars of the mods Horizon can carry
@@ -150,12 +150,12 @@ same name the player put there is never overwritten.
 From a terminal (or an agent):
 
 ```sh
-horizon-launcher mods search faithful                 # --kind mod|modpack|resource|shader, --everything, --source
-horizon-launcher mods check macaws-fences-and-walls   # a Java mod's verdict, what ports and what doesn't (--json)
-horizon-launcher mods install faithful-32x            # id or slug; a Java mod is ported, a modpack imported and ported
-horizon-launcher mods list                            # --json
-horizon-launcher mods update [faithful-32x] [--check]
-horizon-launcher mods remove faithful-32x
+elyhorizon-launcher mods search faithful                 # --kind mod|modpack|resource|shader, --everything, --source
+elyhorizon-launcher mods check macaws-fences-and-walls   # a Java mod's verdict, what ports and what doesn't (--json)
+elyhorizon-launcher mods install faithful-32x            # id or slug; a Java mod is ported, a modpack imported and ported
+elyhorizon-launcher mods list                            # --json
+elyhorizon-launcher mods update [faithful-32x] [--check]
+elyhorizon-launcher mods remove faithful-32x
 ```
 
 ## Sources
@@ -179,11 +179,11 @@ down installs nothing. It is listed on the Modpacks tab with **Play** and **Remo
 check on it (`horizon_shader_api::check`); a taken-down one is named, for the player to remove.
 
 ```sh
-horizon-launcher mods search --source horizon --kind mod coords   # with whether it is signed and what it may do
-horizon-launcher mods install --source horizon coords_hud
-horizon-launcher mods disable coords_hud
-horizon-launcher mods install --source horizon cozy               # a modpack: its own profile
-horizon-launcher modpack play cozy
+elyhorizon-launcher mods search --source horizon --kind mod coords   # with whether it is signed and what it may do
+elyhorizon-launcher mods install --source horizon coords_hud
+elyhorizon-launcher mods disable coords_hud
+elyhorizon-launcher mods install --source horizon cozy               # a modpack: its own profile
+elyhorizon-launcher modpack play cozy
 ```
 
 
@@ -194,7 +194,7 @@ Modrinth asks.
 
 CurseForge support is coming soon. Its API (`api.curseforge.com/v1`) needs a paid key, so for now the launcher
 doesn't use it: the Mods page shows **CurseForge (coming soon)** beside the Modrinth switch, disabled, and no search
-or install goes to CurseForge (`browser::sources()` is Modrinth only; `horizon-launcher mods ... --source curseforge`
+or install goes to CurseForge (`browser::sources()` is Modrinth only; `elyhorizon-launcher mods ... --source curseforge`
 says it is coming soon). The CurseForge source (`browser/curseforge.rs`) is kept for when it comes.
 
 A CurseForge modpack zip or instance the player already has still imports, since that needs no key: its jars come

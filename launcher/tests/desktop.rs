@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 
 fn desktop_entry(home: &Path, wrapper: Option<&str>, args: &[&str]) {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_horizon-launcher"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_elyhorizon-launcher"));
     command
         .arg("desktop-entry")
         .args(args)
@@ -28,17 +28,17 @@ fn desktop_entry(home: &Path, wrapper: Option<&str>, args: &[&str]) {
 fn menu_registration_preserves_the_package_wrapper() {
     let home = std::env::temp_dir().join(format!("horizon-desktop-wrapper-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
-    let entry = home.join("data/applications/horizon-launcher.desktop");
+    let entry = home.join("data/applications/elyhorizon-launcher.desktop");
 
     // Migrate a registration that pointed at the private executable.
     desktop_entry(&home, None, &[]);
     let original = std::fs::read_to_string(&entry).unwrap();
     assert!(original.contains(&format!(
         "Exec=\"{}\"\n",
-        env!("CARGO_BIN_EXE_horizon-launcher")
+        env!("CARGO_BIN_EXE_elyhorizon-launcher")
     )));
 
-    let wrapper = "/usr/bin/horizon-launcher";
+    let wrapper = "/usr/bin/elyhorizon-launcher";
     for _ in 0..2 {
         desktop_entry(&home, Some(wrapper), &[]);
         let text = std::fs::read_to_string(&entry).unwrap();

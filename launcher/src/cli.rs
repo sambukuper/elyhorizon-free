@@ -1,4 +1,4 @@
-//! `horizon-launcher <subcommand>`: the same steps as the window, from a terminal. Every
+//! `elyhorizon-launcher <subcommand>`: the same steps as the window, from a terminal. Every
 //! command goes through `backend`; this file only parses arguments and prints.
 use clap::{Parser, Subcommand};
 use horizon_launcher::account::{self, Accounts};
@@ -11,9 +11,9 @@ use std::process::Command;
 
 #[derive(Parser)]
 #[command(
-    name = "horizon-launcher",
+    name = "elyhorizon-launcher",
     version = backend::VERSION,
-    about = "Installs, prepares and starts Horizon. Without a subcommand, opens the window."
+    about = "Installs, prepares and starts ElyHorizon. Without a subcommand, opens the window."
 )]
 struct Cli {
     /// Print JSON instead of text, where a command has something to report
@@ -80,7 +80,7 @@ enum AccountCmd {
     /// The signed-in accounts and which one plays
     List,
     /// Sign in with a Microsoft account in your browser (device code). Online play, and
-    /// Horizon's own download of Minecraft, need one that owns Minecraft: Java Edition; offline
+    /// ElyHorizon's own download of Minecraft, need one that owns Minecraft: Java Edition; offline
     /// play needs no account
     SignIn,
     /// Sign out: the account's tokens leave the keychain
@@ -205,9 +205,9 @@ enum InstanceCmd {
     },
     /// Make Play start this instance
     Select { instance: String },
-    /// Keep an instance on one installed Horizon version, or "latest" to follow updates again
+    /// Keep an instance on one installed ElyHorizon version, or "latest" to follow updates again
     Version { instance: String, version: String },
-    /// Export an instance (or a port) to share: its settings, packs, Horizon mods and the worlds
+    /// Export an instance (or a port) to share: its settings, packs, ElyHorizon mods and the worlds
     /// named, as a .mrpack (resource packs from Modrinth listed by download) or a zip. Never
     /// logs, screenshots or account data; worlds go without their per-player files
     Export {
@@ -433,7 +433,7 @@ enum ModsCmd {
         #[arg(long)]
         instance: Option<String>,
     },
-    /// Search for packs Horizon loads
+    /// Search for packs ElyHorizon loads
     Search {
         text: Vec<String>,
         #[arg(long, value_enum, default_value_t = KindArg::Resource)]
@@ -444,7 +444,7 @@ enum ModsCmd {
         #[arg(long, value_enum, default_value_t = SourceArg::Modrinth)]
         source: SourceArg,
     },
-    /// Say how well a Java mod runs in Horizon: its jar is downloaded (checksum checked),
+    /// Say how well a Java mod runs in ElyHorizon: its jar is downloaded (checksum checked),
     /// carried over and read; the answer is kept
     Check {
         project: String,
@@ -509,7 +509,7 @@ enum KindArg {
     Mod,
     Resource,
     Modpack,
-    /// Horizon's own shader packs (Horizon's registry only)
+    /// ElyHorizon's own shader packs (ElyHorizon's registry only)
     Shader,
     /// Data packs (Modrinth): install one into a world with `mods install <pack> --world <name>`
     Datapack,
@@ -520,8 +520,8 @@ enum SourceArg {
     Modrinth,
     /// CurseForge support is coming soon
     Curseforge,
-    /// Horizon's own registry: mods, modpacks and resource packs made for Horizon, reviewed
-    Horizon,
+    /// ElyHorizon's own registry: mods, modpacks and resource packs made for ElyHorizon, reviewed
+    ElyHorizon,
 }
 
 impl SourceArg {
@@ -530,7 +530,7 @@ impl SourceArg {
         let id = match self {
             SourceArg::Modrinth => SourceId::Modrinth,
             SourceArg::Curseforge => SourceId::CurseForge,
-            SourceArg::Horizon => SourceId::Horizon,
+            SourceArg::ElyHorizon => SourceId::ElyHorizon,
         };
         browser::source(id).ok_or_else(|| browser::CURSEFORGE_SOON.into())
     }
@@ -538,7 +538,7 @@ impl SourceArg {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// List Horizon releases, or the installed versions
+    /// List ElyHorizon releases, or the installed versions
     Versions {
         /// Only the versions installed here (no network)
         #[arg(long)]
@@ -613,7 +613,7 @@ enum Cmd {
     /// while-playing stay|minimize|hide (what the window does while the game runs), language
     /// system|en|fr|ru (the window's language; system follows the computer's), accent
     /// violet|blue|teal|green|amber|red|pink, background PATH (a picture behind Home; "default"
-    /// shows Horizon's landscape)
+    /// shows ElyHorizon's landscape)
     Settings {
         #[arg(value_parser = SETTING_KEYS)]
         key: Option<String>,
@@ -648,13 +648,13 @@ enum Cmd {
         #[arg(long)]
         crash: bool,
     },
-    /// Look for a newer Horizon release and launcher, and install them
+    /// Look for a newer ElyHorizon release and launcher, and install them
     Update {
         /// Only report what is available
         #[arg(long)]
         check: bool,
     },
-    /// Linux: put Horizon in the applications menu (an entry and the icon, under
+    /// Linux: put ElyHorizon in the applications menu (an entry and the icon, under
     /// $XDG_DATA_HOME), or take it out with --remove
     DesktopEntry {
         /// Remove the entry and the icon, and stop adding them back
@@ -971,7 +971,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 );
             } else {
                 println!(
-                    "Installed {tag}. Prepare it next: horizon-launcher prepare --version {tag}"
+                    "Installed {tag}. Prepare it next: elyhorizon-launcher prepare --version {tag}"
                 );
             }
         }
@@ -1196,7 +1196,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             } else {
                 println!("{}", shared.url);
                 println!(
-                    "Delete it: horizon-launcher unshare-log {}:{}",
+                    "Delete it: elyhorizon-launcher unshare-log {}:{}",
                     shared.id, shared.token
                 );
             }
@@ -1228,10 +1228,10 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             settings.save();
             if remove {
                 horizon_launcher::desktop::remove()?;
-                println!("Removed Horizon from the applications menu.");
+                println!("Removed ElyHorizon from the applications menu.");
             } else {
                 horizon_launcher::desktop::install(backend::exe_path())?;
-                println!("Horizon is in the applications menu.");
+                println!("ElyHorizon is in the applications menu.");
             }
         }
         Cmd::Worlds { action } => worlds(
@@ -1273,12 +1273,12 @@ fn update(check: bool, as_json: bool) -> Result<(), String> {
         return Ok(());
     }
     match &updates.horizon {
-        None => println!("Horizon: up to date."),
-        Some(r) if check => println!("Horizon: {} is available.", r.tag),
+        None => println!("ElyHorizon: up to date."),
+        Some(r) if check => println!("ElyHorizon: {} is available.", r.tag),
         Some(r) => {
             let tag =
                 backend::install_tag(&r.tag, true, progress(format!("Installing {}", r.tag)))?;
-            println!("Horizon: installed {tag}.");
+            println!("ElyHorizon: installed {tag}.");
         }
     }
     match &updates.launcher {
@@ -1305,10 +1305,9 @@ fn update(check: bool, as_json: bool) -> Result<(), String> {
 fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
     let mut accounts = Accounts::load();
     let find = |accounts: &Accounts, who: &str| {
-        accounts
-            .find(who)
-            .cloned()
-            .ok_or_else(|| format!("No signed-in account {who}. See `horizon-launcher account`."))
+        accounts.find(who).cloned().ok_or_else(|| {
+            format!("No signed-in account {who}. See `elyhorizon-launcher account`.")
+        })
     };
     match action {
         AccountCmd::List => {
@@ -1328,7 +1327,7 @@ fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
             } else if accounts.accounts.is_empty() && accounts.offline.is_empty() {
                 println!(
                     "No Microsoft account signed in: the game plays offline, as the name it made \
-                     up. Add a name with `horizon-launcher account offline NAME`; online servers \
+                     up. Add a name with `elyhorizon-launcher account offline NAME`; online servers \
                      need one that owns Minecraft: Java Edition (`account sign-in`)."
                 );
             } else {
@@ -1553,7 +1552,7 @@ fn servers(action: ServersCmd, as_json: bool) -> Result<(), String> {
             .into_iter()
             .find(|e| e.name == which || e.dir == std::path::Path::new(which))
             .ok_or_else(|| {
-                format!("No server called {which}: `horizon-launcher servers` lists them")
+                format!("No server called {which}: `elyhorizon-launcher servers` lists them")
             })
     };
     match action {
@@ -1571,7 +1570,7 @@ fn servers(action: ServersCmd, as_json: bool) -> Result<(), String> {
                         .collect(),
                 ));
             } else if list.is_empty() {
-                println!("No server yet: horizon-launcher servers create --accept-eula");
+                println!("No server yet: elyhorizon-launcher servers create --accept-eula");
             }
             for e in list.iter().filter(|_| !as_json) {
                 println!(
@@ -1624,7 +1623,7 @@ fn servers(action: ServersCmd, as_json: bool) -> Result<(), String> {
             let tag = backend::resolve_version(version.as_deref())?;
             servers::set_up(&tag)?;
             println!(
-                "Servers run Horizon {}",
+                "Servers run ElyHorizon {}",
                 servers::runtime_release().unwrap_or(tag)
             );
         }
@@ -1673,7 +1672,7 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
     let from_registry = installed::Installed::load(&home)
         .entries
         .iter()
-        .any(|e| e.source == SourceId::Horizon);
+        .any(|e| e.source == SourceId::ElyHorizon);
     if from_registry {
         if let Ok(index) = horizon::index() {
             for said in horizon::turn_off_revoked(&index, &home) {
@@ -1689,7 +1688,7 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
                 json(list.iter().map(entry_json).collect());
             } else if list.is_empty() {
                 println!(
-                    "Nothing installed from the browser yet: horizon-launcher mods search <text>"
+                    "Nothing installed from the browser yet: elyhorizon-launcher mods search <text>"
                 );
             }
             for e in list.iter().filter(|_| !as_json) {
@@ -1730,7 +1729,7 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
                         "id": p.id, "slug": p.slug, "title": p.title, "summary": p.summary,
                         "author": p.author, "downloads": p.downloads, "page": p.page,
                         "license": p.license, "support": support.label(), "reason": support.reason(),
-                        "about": if p.source == SourceId::Horizon { horizon::trust_and_capabilities(&p.id) } else { Vec::new() },
+                        "about": if p.source == SourceId::ElyHorizon { horizon::trust_and_capabilities(&p.id) } else { Vec::new() },
                     })
                 }).collect());
             } else {
@@ -1739,7 +1738,7 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
                 }
                 for p in &found {
                     let support = p.support();
-                    if p.source == SourceId::Horizon {
+                    if p.source == SourceId::ElyHorizon {
                         println!("{}  ({})  {}\n  {}", p.title, p.slug, p.author, p.summary);
                         for line in horizon::trust_and_capabilities(&p.id) {
                             println!("  {line}");
@@ -1760,9 +1759,12 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
                         p.summary
                     );
                     if unchecked {
-                        println!("  horizon-launcher mods check {}", p.slug);
+                        println!("  elyhorizon-launcher mods check {}", p.slug);
                     } else if datapack {
-                        println!("  horizon-launcher mods install {} --world <world>", p.slug);
+                        println!(
+                            "  elyhorizon-launcher mods install {} --world <world>",
+                            p.slug
+                        );
                     } else if let Some(why) = support.reason() {
                         println!("  {why}");
                     }
@@ -1851,7 +1853,7 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
                     p.title
                 ));
             }
-            if p.kind == Kind::Modpack && p.source == SourceId::Horizon {
+            if p.kind == Kind::Modpack && p.source == SourceId::ElyHorizon {
                 let pack = horizon::pack::install(&p.id, &line)?;
                 if as_json {
                     json(
@@ -1864,7 +1866,7 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
                         pack.version,
                         pack.mods.join(", ")
                     );
-                    println!("Play it: horizon-launcher modpack play {}", pack.id);
+                    println!("Play it: elyhorizon-launcher modpack play {}", pack.id);
                 }
                 return Ok(());
             }
@@ -1879,7 +1881,7 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
                     .map(|t| backend::resources(&t));
                 let pack = modpacks::import_and_port(&file, resources.as_deref(), log)?;
                 println!("{} ({})", modpacks::outcome(&pack), pack.summary());
-                println!("Play it: horizon-launcher modpack play {}", pack.slug);
+                println!("Play it: elyhorizon-launcher modpack play {}", pack.slug);
                 return Ok(());
             }
             let done = installed::install(&*source, &p, everything, &home, &line)?;
@@ -1943,7 +1945,7 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
             if on {
                 if let Some(r) = horizon::index()
                     .ok()
-                    .filter(|_| e.source == SourceId::Horizon)
+                    .filter(|_| e.source == SourceId::ElyHorizon)
                     .and_then(|i| {
                         i.revoked(&e.project, e.checksum.trim_start_matches("SHA-256:"))
                             .cloned()
@@ -2148,7 +2150,7 @@ fn instance(action: InstanceCmd, as_json: bool) -> Result<(), String> {
                         json(value(&i, false));
                     } else {
                         println!(
-                            "Made the instance {} in {}: horizon-launcher instance select \"{}\"",
+                            "Made the instance {} in {}: elyhorizon-launcher instance select \"{}\"",
                             i.name,
                             i.home.display(),
                             i.name
@@ -2159,7 +2161,7 @@ fn instance(action: InstanceCmd, as_json: bool) -> Result<(), String> {
                     let pack = modpacks::import(&file, &|line: String| eprintln!("{line}"))?;
                     println!("{} ({})", modpacks::outcome(&pack), pack.summary());
                     println!(
-                        "Port and play it: horizon-launcher modpack port {}",
+                        "Port and play it: elyhorizon-launcher modpack port {}",
                         pack.slug
                     );
                 }
@@ -2170,13 +2172,13 @@ fn instance(action: InstanceCmd, as_json: bool) -> Result<(), String> {
                     };
                     let p = horizon_launcher::packs::add(&i.home, &file)?;
                     println!(
-                        "Added {} to {}: turn it on with horizon-launcher packs on",
+                        "Added {} to {}: turn it on with elyhorizon-launcher packs on",
                         p.title, i.name
                     );
                 }
                 Dropped::DataPack => {
                     return Err(format!(
-                        "{} is a data pack: put it into a world with horizon-launcher worlds \
+                        "{} is a data pack: put it into a world with elyhorizon-launcher worlds \
                          datapack-add <world> <file>",
                         file.display()
                     ))
@@ -2562,7 +2564,7 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
             let packs = modpacks::list();
             let registry = horizon::pack::list();
             if packs.is_empty() && registry.is_empty() && !as_json {
-                println!("No modpack imported yet: horizon-launcher modpack import <pack>");
+                println!("No modpack imported yet: elyhorizon-launcher modpack import <pack>");
             }
             packs.iter().for_each(show);
             for p in &registry {
@@ -2572,7 +2574,7 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
                     );
                 } else {
                     println!(
-                        "{} {}  ({}, from Horizon's registry)\n  {}",
+                        "{} {}  ({}, from ElyHorizon's registry)\n  {}",
                         p.name,
                         p.version,
                         p.id,
@@ -2616,7 +2618,7 @@ mod tests {
     #[test]
     fn play_takes_extra_arguments_that_start_with_hyphens() {
         let cli = Cli::try_parse_from([
-            "horizon-launcher",
+            "elyhorizon-launcher",
             "play",
             "--arg",
             "--server-thread",
@@ -2633,7 +2635,7 @@ mod tests {
     #[test]
     fn game_args_takes_one_line_that_starts_with_hyphens() {
         let cli = Cli::try_parse_from([
-            "horizon-launcher",
+            "elyhorizon-launcher",
             "game-args",
             "--server-thread --render-distance 40",
         ])
@@ -2652,7 +2654,8 @@ mod tests {
     #[test]
     fn mods_commands_name_their_instance() {
         let parse = |args: &[&str]| {
-            let cli = Cli::try_parse_from([&["horizon-launcher", "mods"], args].concat()).unwrap();
+            let cli =
+                Cli::try_parse_from([&["elyhorizon-launcher", "mods"], args].concat()).unwrap();
             match cli.command {
                 Some(Cmd::Mods { action }) => action,
                 _ => panic!("expected mods"),
@@ -2674,7 +2677,7 @@ mod tests {
         assert!(parse(&[]).is_none());
         // Search and Check read no instance: checks are shared.
         assert!(Cli::try_parse_from([
-            "horizon-launcher",
+            "elyhorizon-launcher",
             "mods",
             "search",
             "x",

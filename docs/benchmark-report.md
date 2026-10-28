@@ -54,7 +54,7 @@ one (histogram edges included) makes it 2.
 
 **`created`.** When the run ended, UTC, `YYYY-MM-DDTHH:MM:SSZ`.
 
-**`app`.** What was measured: `name` (`horizon-client`, `horizon-launcher`, `minecraft`), `version`,
+**`app`.** What was measured: `name` (`horizon-client`, `elyhorizon-launcher`, `minecraft`), `version`,
 optionally `commit` (Horizon builds) and `mods` (`[{ "name", "version" }]`, vanilla with mods).
 
 **`hardware`.** `os` (`macos`, `linux`, `windows`), `os_version`, `arch`, `cpu` (brand string),
@@ -90,7 +90,7 @@ confidence interval of the mean, Student's t, null when `n` is 1). The unit is t
 | `power.package_w`, `power.battery_drain_pct` | power draw, battery used per hour (laptops; planned) |
 | `thermal.cpu_c`, `thermal.throttled_pct` | temperature, share of the run spent throttled (planned) |
 | `launcher.start_ms` | launcher process start to its first frame (a session) |
-| `launcher.cold_start_ms`, `launcher.warm_start_ms` | the same in `horizon-launcher benchmark`: its first start, then the others |
+| `launcher.cold_start_ms`, `launcher.warm_start_ms` | the same in `elyhorizon-launcher benchmark`: its first start, then the others |
 | `launcher.rss_mb`, `launcher.cpu_idle_pct` | launcher resident memory (sampled; `max` is the peak), CPU used while idle |
 | `launcher.release_list_ms` | fetching the release list |
 | `launcher.install_ms`, `launcher.update_ms` | downloading and unpacking a version: a new one, an update |

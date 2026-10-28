@@ -68,12 +68,13 @@ fn each_system_gets_its_plan() {
     assert_eq!(
         plan(
             &both,
-            os(&[r"C:\Horizon\horizon-client.exe", "--world", "My World"]),
+            os(&[r"C:\ElyHorizon\horizon-client.exe", "--world", "My World"]),
             true,
             &Found::default()
         ),
         Plan::Cmd {
-            line: r#"echo hi && nice -n 5 C:\Horizon\horizon-client.exe --world "My World""#.into()
+            line: r#"echo hi && nice -n 5 C:\ElyHorizon\horizon-client.exe --world "My World""#
+                .into()
         }
     );
 }

@@ -549,7 +549,10 @@ fn long_secrets_split_into_keychain_sized_pieces() {
 
 #[test]
 fn session_files_are_private_and_complete() {
-    let dir = std::env::temp_dir().join(format!("horizon-launcher-session-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "elyhorizon-launcher-session-{}",
+        std::process::id()
+    ));
     let account = Account {
         uuid: UUID.into(),
         name: "Notch".into(),

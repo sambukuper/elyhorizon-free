@@ -74,7 +74,7 @@ nothing else. Offline play never asks for one.
 
 - **Offline play needs nothing.** An offline name, or the name the game makes up, starts the game
   with no sign-in, no keychain item and no request: the launcher hands the game `--name` and no
-  session. Offline names are added in Settings → Microsoft account (or `horizon-launcher account
+  session. Offline names are added in Settings → Microsoft account (or `elyhorizon-launcher account
   offline NAME`), and the top bar switches between them, the accounts and the game's own name.
 - **Online play needs an owner.** Joining an online-mode server uses the session of an account
   that owns Minecraft: Java Edition. Play asks `account::launch` for it: the accounts are asked
@@ -99,7 +99,7 @@ nothing else. Offline play never asks for one.
 
 Decided 2026-10-27. This is the only exception to "Horizon never downloads the game", and it
 applies only on the player's machine, for an account that owns the game (checked just before). The
-launcher's "Download and prepare" (`horizon-launcher prepare --download`) fetches the pinned
+launcher's "Download and prepare" (`elyhorizon-launcher prepare --download`) fetches the pinned
 version straight from Mojang (`launcher/src/mojang.rs`): the version file, the client jar,
 libraries, the asset index and the assets, each checked against the size and sha1 Mojang lists.
 They go to `minecraft/` in the launcher's data folder, and the preparation runs as usual. The
@@ -117,7 +117,7 @@ one is selected. "Sign out" deletes the account's secrets from the keychain.
 - Secrets (the Microsoft refresh token, the Minecraft access token and its expiry, the last
   ownership answer) go to the OS
   keychain, one item per account: Keychain on macOS, Credential Manager on Windows, the Secret
-  Service (GNOME Keyring, KWallet) on Linux. Service name `dev.playhorizon.launcher`, account = the
+  Service (GNOME Keyring, KWallet) on Linux. Service name `dev.elyhorizon.launcher`, account = the
   Minecraft UUID. Credential Manager takes at most 2560 bytes per item, which the secrets of a sign-in
   exceed: on macOS and Windows a longer secret is split over the items `<uuid>`, `<uuid>.1`, `<uuid>.2`...
 - `accounts.json` in the launcher's data folder keeps only public data: UUID, name, skin URL, which
@@ -125,7 +125,7 @@ one is selected. "Sign out" deletes the account's secrets from the keychain.
 - No keychain available (a Linux box without a Secret Service, a locked keychain): sign-in still
   works for the session but nothing is saved, and the launcher says "No keychain available: you will
   have to sign in again next time" (it never falls back to a plain file).
-- Tokens never appear in logs, errors, `horizon-launcher` CLI output, MCP results or crash reports.
+- Tokens never appear in logs, errors, `elyhorizon-launcher` CLI output, MCP results or crash reports.
   Requests are logged by endpoint name only.
 
 ## Handing the session to the game

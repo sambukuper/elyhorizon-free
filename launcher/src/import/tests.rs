@@ -5,7 +5,7 @@ use std::time::Duration;
 
 fn scratch(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "horizon-launcher-import-{name}-{}",
+        "elyhorizon-launcher-import-{name}-{}",
         std::process::id()
     ));
     let _ = fs::remove_dir_all(&root);

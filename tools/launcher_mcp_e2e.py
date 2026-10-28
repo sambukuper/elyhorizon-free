@@ -3,14 +3,14 @@
 
 A scratch launcher home gets one "installed" version made of this checkout's builds
 (horizon-client and horizon-ctl) and the prepared resources in .local/horizon-client. An MCP
-client then talks to `horizon-launcher mcp` alone: every CLI command is listed as a tool of the same
+client then talks to `elyhorizon-launcher mcp` alone: every CLI command is listed as a tool of the same
 name (versions, settings, mods_search...), a destructive one needs confirm, the game tools are
 listed, a call before the game runs says to start it, play starts it under control, and
 game_wait_ready, game_state, game_ui and game_screenshot play it until game_quit. Then No AI is turned on with
-`horizon-launcher no-ai on`: `horizon-launcher mcp` refuses to start, and a session already running
+`elyhorizon-launcher no-ai on`: `elyhorizon-launcher mcp` refuses to start, and a session already running
 refuses its next call.
 
-    python3 tools/launcher_mcp_e2e.py --bin-dir target/fast --launcher launcher/target/debug/horizon-launcher
+    python3 tools/launcher_mcp_e2e.py --bin-dir target/fast --launcher launcher/target/debug/elyhorizon-launcher
 
 On macOS the game renders offscreen (it runs in a locked session or over SSH); on Linux it needs
 a display (vscreen on the desktop). Games started here have no audio.
@@ -69,7 +69,7 @@ class Mcp:
 def scenario(m, out):
     init = m.rpc('initialize', {'protocolVersion': '2025-06-18', 'capabilities': {},
                                 'clientInfo': {'name': 'launcher_mcp_e2e', 'version': '1'}})
-    assert init['serverInfo']['name'] == 'horizon-launcher', init
+    assert init['serverInfo']['name'] == 'elyhorizon-launcher', init
     tools = {t['name'] for t in m.rpc('tools/list', {})['tools']}
     for name in ['play', 'server', 'versions', 'settings', 'mods_search', 'modpack_list', 'servers_list',
                  'data_status', 'account_list', 'game_args', 'game_state', 'game_ui', 'game_click',
@@ -151,7 +151,7 @@ def no_ai_scenario(launcher, env, home):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--bin-dir', required=True, help='horizon-client and horizon-ctl built from this checkout')
-    parser.add_argument('--launcher', required=True, help='a horizon-launcher binary')
+    parser.add_argument('--launcher', required=True, help='a elyhorizon-launcher binary')
     parser.add_argument('--out', default=str(ROOT / '.local/launcher-mcp-e2e'), help='the screenshot goes here')
     args = parser.parse_args()
     bins = Path(args.bin_dir).resolve()

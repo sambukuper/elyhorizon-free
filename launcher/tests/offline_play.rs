@@ -1,4 +1,4 @@
-//! Offline play from the outside: with no account at all in the launcher, `horizon-launcher play`
+//! Offline play from the outside: with no account at all in the launcher, `elyhorizon-launcher play`
 //! and the MCP server's play get past the account step and stop only at the version not being
 //! prepared. Nothing asks for a Microsoft account before a game starts.
 use std::io::Write;
@@ -25,7 +25,7 @@ fn home(name: &str) -> PathBuf {
 }
 
 fn launcher(root: &Path, args: &[&str]) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_horizon-launcher"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_elyhorizon-launcher"));
     cmd.args(args)
         .env("HORIZON_HOME", root.join("game"))
         .env("HORIZON_LAUNCHER_HOME", root.join("launcher"))

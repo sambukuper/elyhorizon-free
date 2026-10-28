@@ -1,7 +1,7 @@
 //! Instances: separate game folders, each with its own worlds, options and packs.
 //!
 //! Nothing that exists moves. The game's home (`backend::game_home`) stays the default instance,
-//! "Horizon", with its saves and options where they are. Imported modpacks (`ports/<pack>/home/`)
+//! "ElyHorizon", with its saves and options where they are. Imported modpacks (`ports/<pack>/home/`)
 //! and registry modpacks (`horizon-packs/<id>/home/`) are instances too, played from their own
 //! folders as before. New instances get `instances/<slug>/` in the game's home. What the player
 //! chooses about an instance (its name, icon, group) is kept in `instances.json` in the
@@ -31,7 +31,7 @@ pub enum Kind {
     Own,
     /// An imported Java modpack (modpacks.rs).
     Port,
-    /// A modpack from Horizon's registry.
+    /// A modpack from ElyHorizon's registry.
     Pack,
 }
 
@@ -88,7 +88,7 @@ pub struct Meta {
     pub icon: Option<Icon>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
-    /// The Horizon version this instance plays, kept when newer ones are installed. None: the
+    /// The ElyHorizon version this instance plays, kept when newer ones are installed. None: the
     /// launcher's own version, which follows updates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
@@ -140,7 +140,7 @@ pub struct Instance {
     pub home: PathBuf,
     pub icon: Option<Icon>,
     pub group: Option<String>,
-    /// Its pinned Horizon version, if any (`Meta::version`).
+    /// Its pinned ElyHorizon version, if any (`Meta::version`).
     pub version: Option<String>,
     pub played: Duration,
     pub last_played: Option<SystemTime>,
@@ -155,7 +155,7 @@ impl Instance {
         match (requested, &self.version) {
             (None, Some(pinned)) => backend::resolve_version(Some(pinned)).map_err(|_| {
                 format!(
-                    "{} plays {pinned}, which is not installed: install it, or horizon-launcher \
+                    "{} plays {pinned}, which is not installed: install it, or elyhorizon-launcher \
                      instance version \"{}\" latest",
                     self.name, self.name
                 )
@@ -165,7 +165,7 @@ impl Instance {
     }
 }
 
-/// The instances, by the default game home and the launcher's data folder: Horizon first, then
+/// The instances, by the default game home and the launcher's data folder: ElyHorizon first, then
 /// by group and name.
 pub fn list() -> Vec<Instance> {
     list_in(&backend::game_home(), &backend::data_dir())
@@ -175,7 +175,7 @@ fn list_in(game_home: &Path, data: &Path) -> Vec<Instance> {
     let store = Store::load(data);
     let mut found = vec![(
         DEFAULT.to_string(),
-        "Horizon".to_string(),
+        "ElyHorizon".to_string(),
         Kind::Default,
         game_home.to_path_buf(),
         game_home.to_path_buf(),
@@ -244,10 +244,10 @@ fn find_in(all: &[Instance], query: &str) -> Result<Instance, String> {
         .or_else(|| all.iter().find(|i| i.name.eq_ignore_ascii_case(q)))
         .or_else(|| all.iter().find(|i| bare(&i.id) == q))
         .cloned()
-        .ok_or_else(|| format!("No instance {q}: horizon-launcher instance list shows them"))
+        .ok_or_else(|| format!("No instance {q}: elyhorizon-launcher instance list shows them"))
 }
 
-/// The instance Play starts: the one picked in the launcher, else Horizon.
+/// The instance Play starts: the one picked in the launcher, else ElyHorizon.
 pub fn selected() -> Instance {
     let all = list();
     backend::Settings::load()

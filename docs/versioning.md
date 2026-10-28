@@ -14,7 +14,7 @@ game and the launcher of the 0.2 line.
 | From 0.2 | `v0.2.0`, `v0.2.1`, … | `launcher@0.2.0`, `launcher@0.2.1`, … |
 | Before 0.2 | `v2026.10.19`, `v2026.10.19.15`, … | `launcher-v0.1.1` … `launcher-v0.16.0` (and the bridge, `launcher-v0.17.0`) |
 | Release title | `Horizon 0.2.3: <what changed>` | `Horizon launcher 0.2.1` |
-| The program says | `horizon-server 0.2.3`, `v0.2.3` in crash reports and telemetry | `horizon-launcher 0.2.1` |
+| The program says | `horizon-server 0.2.3`, `v0.2.3` in crash reports and telemetry | `elyhorizon-launcher 0.2.1` |
 
 - **The line** (`MAJOR.MINOR`) is in `.github/release-line.txt`, one line such as `0.2`. Ludovic decides when it
   moves; moving it is a one-line pull request (`0.3`), and the new line's first releases (`v0.3.0`,
@@ -120,7 +120,7 @@ Run by the orchestrator, in this order. Until step 3, nothing is published.
    dated game beta (`v2026.10.DD`) and `launcher-v0.17.0`. Check:
    ```sh
    gh release list --limit 5
-   gh run list --workflow launcher --limit 1   # its build log shows horizon-launcher 0.17.0
+   gh run list --workflow launcher --limit 1   # its build log shows elyhorizon-launcher 0.17.0
    ```
 4. Let the game bridge become stable on its normal schedule: about 6 hours after it was published, the promote run
    makes it *latest*. Do not force it (`promote` with `force=true`): it carries about 43 player-facing pull requests
