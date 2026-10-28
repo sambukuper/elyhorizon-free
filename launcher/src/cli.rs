@@ -79,8 +79,9 @@ enum ServersCmd {
 enum AccountCmd {
     /// The signed-in accounts and which one plays
     List,
-    /// Sign in with a Microsoft account in your browser (device code). Play needs one that owns
-    /// Minecraft: Java Edition
+    /// Sign in with a Microsoft account in your browser (device code). Online play, and
+    /// Horizon's own download of Minecraft, need one that owns Minecraft: Java Edition; offline
+    /// play needs no account
     SignIn,
     /// Sign out: the account's tokens leave the keychain
     SignOut {
@@ -89,9 +90,8 @@ enum AccountCmd {
     },
     /// Play as this account, or as one of your offline names
     Select { who: String },
-    /// Play offline (LAN, offline-mode servers) beside a signed-in account that owns the game:
-    /// as NAME (kept to switch back to; 3 to 16 letters, digits or _), or as the name the game
-    /// made up
+    /// Play offline (LAN, offline-mode servers) with no account at all: as NAME (kept to switch
+    /// back to; 3 to 16 letters, digits or _), or as the name the game made up
     Offline { name: Option<String> },
     /// Forget one of your offline names
     ForgetOffline { name: String },
@@ -562,7 +562,8 @@ enum Cmd {
         #[arg(long)]
         version: Option<String>,
     },
-    /// Start the client (needs a signed-in Microsoft account that owns Minecraft: Java Edition)
+    /// Start the client: offline with no account, or online with a signed-in Microsoft account
+    /// that owns Minecraft: Java Edition
     Play {
         #[arg(long)]
         version: Option<String>,
@@ -1032,11 +1033,6 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             }
             cmd.args(arg);
             let started = std::time::Instant::now();
-            let accounts = Accounts::load();
-            if let Some(name) = accounts.name_arg() {
-                cmd.arg("--name").arg(name);
-            }
-            cmd.envs(accounts.look_env());
             let played = attached(horizon_launcher::launch::wrap(cmd, &instance.launch));
             if let Err(e) = instances::record_play(&instance.id, started.elapsed()) {
                 eprintln!("Play time not saved: {e}");
@@ -1331,8 +1327,9 @@ fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
                 }));
             } else if accounts.accounts.is_empty() && accounts.offline.is_empty() {
                 println!(
-                    "No Microsoft account signed in. Play needs one that owns Minecraft: Java \
-                     Edition: horizon-launcher account sign-in"
+                    "No Microsoft account signed in: the game plays offline, as the name it made \
+                     up. Add a name with `horizon-launcher account offline NAME`; online servers \
+                     need one that owns Minecraft: Java Edition (`account sign-in`)."
                 );
             } else {
                 for a in &accounts.accounts {
@@ -1394,7 +1391,7 @@ fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
                 ),
                 (None, None) => return Err(find(&accounts, &who).unwrap_err()),
             };
-            accounts.play_as(account::store(), player)?;
+            accounts.play_as(player)?;
             accounts.save()?;
             println!("The game plays as {name}.");
         }
@@ -1403,7 +1400,7 @@ fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
                 Some(n) => account::Player::Offline(n),
                 None => account::Player::GameName,
             };
-            accounts.play_as(account::store(), player)?;
+            accounts.play_as(player)?;
             accounts.save()?;
             match accounts.name_arg() {
                 Some(n) => println!("The game plays offline as {n}."),

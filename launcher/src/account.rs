@@ -5,9 +5,12 @@
 //! reads once (`--session-file`), never on its command line. Tokens never reach logs, errors or
 //! output.
 //!
-//! The owner gate ([`launch`]): the launcher starts the game only while an account in it owns
-//! Minecraft: Java Edition, as other launchers do. Offline names play behind such an account.
-//! The game binary itself, its harnesses and the servers don't go through the launcher's gate.
+//! Offline play needs no account: an offline name, or the name the game made up, starts the game
+//! as it is (`--name`), signed in or not. A Microsoft account adds online play (online-mode
+//! servers, the player's own name and skin) and the launcher's own download of the game, which is
+//! what the owner check ([`launch`]) answers: an account that owns Minecraft: Java Edition. It
+//! never stops the game from starting. The game binary itself, its harnesses and the servers go
+//! through no check at all.
 //!
 //! The Azure app (client ID) is Horizon's own and is configuration: `HORIZON_MSA_CLIENT_ID` at
 //! build time, or at run time to override it. Without one, sign-in says it is not configured.
@@ -21,10 +24,15 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub const SERVICE: &str = "dev.playhorizon.launcher";
 const SCOPE: &str = "XboxLive.signin offline_access";
 pub const NOT_CONFIGURED: &str =
-    "This build of the launcher has no Microsoft sign-in (HORIZON_MSA_CLIENT_ID), so it can't start the game.";
-/// What every Play says while no account in the launcher owns the game.
+    "This build of the launcher has no Microsoft sign-in (HORIZON_MSA_CLIENT_ID), so it can't sign \
+     in: the game plays offline.";
+/// What online play, and the launcher's own download of Minecraft, need: an account that owns
+/// Minecraft: Java Edition. Offline play needs no account.
 pub const NEEDS_OWNER: &str =
-    "Sign in with a Microsoft account that owns Minecraft: Java Edition to play";
+    "Online play needs a Microsoft account that owns Minecraft: Java Edition";
+/// Why a selected account starts the game without its session: no account here owns the game, so
+/// the run is offline.
+const NO_OWNER_PLAYS_OFFLINE: &str = "No signed-in account owns Minecraft: Java Edition";
 const DOES_NOT_OWN: &str = "This account doesn't own Minecraft: Java Edition.";
 const NO_PROFILE: &str =
     "This account has no Minecraft profile yet. Create one at minecraft.net, then sign in again.";
@@ -784,9 +792,6 @@ pub enum Player {
     GameName,
 }
 
-const OFFLINE_NEEDS_OWNER: &str =
-    "Offline names need a Microsoft account that owns Minecraft: Java Edition in the launcher.";
-
 /// The secrets an account keeps in `store`, if it still has them there.
 fn secrets_in(store: &dyn SecretStore, uuid: &str) -> Option<Secrets> {
     store
@@ -850,7 +855,8 @@ impl Accounts {
         Ok(())
     }
     /// Whether an account here owned the game at its last check (the keychain's answer, no
-    /// request): what Play and offline names need.
+    /// request): what online play and the launcher's own download of Minecraft need. Offline play
+    /// needs nothing.
     pub fn has_owner(&self, store: &dyn SecretStore) -> bool {
         self.accounts
             .iter()
@@ -866,9 +872,9 @@ impl Accounts {
         }
     }
 
-    /// Plays as `who`: an account, an offline name (kept, only beside an account that owns the
-    /// game), or the game's own name.
-    pub fn play_as(&mut self, store: &dyn SecretStore, who: Player) -> Result<(), String> {
+    /// Plays as `who`: an account, an offline name, or the game's own name. An offline name needs
+    /// no account: it is kept (once, in any case) and given to the game as `--name`.
+    pub fn play_as(&mut self, who: Player) -> Result<(), String> {
         match who {
             Player::Microsoft(uuid) => {
                 if !self.accounts.iter().any(|a| a.uuid == uuid) {
@@ -877,9 +883,6 @@ impl Accounts {
                 self.selected = Some(uuid);
             }
             Player::Offline(name) => {
-                if !self.has_owner(store) {
-                    return Err(OFFLINE_NEEDS_OWNER.into());
-                }
                 let name = self.add_offline(&name)?;
                 self.selected = None;
                 self.offline_selected = Some(name);
@@ -956,8 +959,8 @@ impl Accounts {
         }
     }
 
-    /// Sign out: the secrets leave the keychain, the account the list. Offline names stay, but
-    /// play only once an account that owns the game is back.
+    /// Sign out: the secrets leave the keychain, the account the list. Offline names stay, and
+    /// play without an account as they always could.
     pub fn remove(&mut self, store: &dyn SecretStore, uuid: &str) -> Result<(), String> {
         store.delete(uuid)?;
         self.accounts.retain(|a| a.uuid != uuid);
@@ -968,7 +971,8 @@ impl Accounts {
     }
 }
 
-/// No account in the launcher owns Minecraft: Java Edition: the game must not start.
+/// No account in the launcher owns Minecraft: Java Edition: nothing to download the game for, and
+/// no online play. The game still starts, offline.
 #[derive(Debug, PartialEq)]
 pub struct NoOwner;
 impl std::fmt::Display for NoOwner {
@@ -977,7 +981,7 @@ impl std::fmt::Display for NoOwner {
     }
 }
 
-/// The owner gate's pass for one launch.
+/// The owner check's answer for one launch.
 #[derive(Debug, Default)]
 pub struct Launch {
     /// The selected account and its renewed session; none when an offline name plays, or when
@@ -990,11 +994,12 @@ pub struct Launch {
     pub owner: Option<(Account, Secrets)>,
 }
 
-/// The owner gate: the game starts only while an account in the launcher owns Minecraft: Java
-/// Edition. The accounts are asked again, the selected one first, until one owns it; each keeps
-/// the answer in the keychain. An account that gets no answer (no network) keeps its last one, so
-/// being offline never blocks a player who passed before, while "doesn't own" blocks at once.
-/// The caller saves `accounts` (renewed names and skins).
+/// The owner check: whether an account in the launcher owns Minecraft: Java Edition, which online
+/// play and the launcher's own download need. The accounts are asked again, the selected one
+/// first, until one owns it; each keeps the answer in the keychain. An account that gets no answer
+/// (no network) keeps its last one, so being offline never loses an owner who passed before.
+/// The caller saves `accounts` (renewed names and skins). This never decides whether the game
+/// starts: [`session_for_game`] starts it offline when nothing here owns the game.
 pub fn launch(
     ep: &Endpoints,
     client_id: Option<&str>,
@@ -1144,23 +1149,45 @@ impl SignIn {
     }
 }
 
-/// The owner gate for the game about to start, then the selected account's session in a file
-/// for it: the file (none: offline) and why the account plays offline this time, if it does.
-pub fn session_for_game(game_home: &Path) -> Result<(Option<PathBuf>, Option<String>), NoOwner> {
+/// What the game about to start gets: its session file, and why it plays offline when it does.
+/// No account plays (an offline name, or the game's own name) or nothing here owns the game: the
+/// game starts offline, as it is. It never refuses: playing offline needs no account.
+pub fn session_for_game(game_home: &Path) -> (Option<PathBuf>, Option<String>) {
     let mut accounts = Accounts::load();
+    if accounts.selected().is_none() {
+        // An offline name or the game's own name plays: no sign-in, no session, no request.
+        return (None, None);
+    }
     let pass = launch(
         &Endpoints::live(),
         client_id().as_deref(),
         store(),
         &mut accounts,
-    )?;
+    );
     let _ = accounts.save();
+    let pass = match pass {
+        Ok(pass) => pass,
+        Err(NoOwner) => {
+            // A selected account whose secrets are gone says so, as `launch` would have.
+            let why = accounts
+                .selected()
+                .filter(|a| secrets_in(store(), &a.uuid).is_none())
+                .map(|a| {
+                    format!(
+                        "{} is no longer signed in on this computer. Sign in again",
+                        a.name
+                    )
+                })
+                .unwrap_or_else(|| NO_OWNER_PLAYS_OFFLINE.to_string());
+            return (None, Some(why));
+        }
+    };
     let Some((account, secrets)) = pass.session else {
-        return Ok((None, pass.offline));
+        return (None, pass.offline);
     };
     match write_session_file(&game_home.join("sessions"), &account, &secrets) {
-        Ok(file) => Ok((Some(file), None)),
-        Err(e) => Ok((None, Some(e))),
+        Ok(file) => (Some(file), None),
+        Err(e) => (None, Some(e)),
     }
 }
 

@@ -332,7 +332,7 @@ fn an_owner_plays_with_a_session() {
 }
 
 #[test]
-fn a_no_from_the_services_blocks_at_once() {
+fn a_no_from_the_services_leaves_no_owner() {
     let (_, ep) = mock(|m| m.owns_game = false);
     let store = MemoryStore::default();
     let mut accounts = signed_in(&store, &secrets("mc-token", true));
@@ -349,7 +349,7 @@ fn a_no_from_the_services_blocks_at_once() {
     );
     assert_eq!(
         NoOwner.to_string(),
-        "Sign in with a Microsoft account that owns Minecraft: Java Edition to play."
+        "Online play needs a Microsoft account that owns Minecraft: Java Edition."
     );
 }
 
@@ -411,26 +411,34 @@ fn any_owner_opens_the_gate_and_the_one_who_plays_brings_the_session() {
 }
 
 #[test]
-fn offline_names_play_only_beside_an_owner() {
+fn offline_names_play_without_any_account() {
     let store = MemoryStore::default();
     let mut accounts = Accounts::default();
-    let refused = accounts.play_as(&store, Player::Offline("Builder_1".into()));
-    assert_eq!(refused.unwrap_err(), OFFLINE_NEEDS_OWNER);
-    assert!(accounts.offline.is_empty());
+    // No sign-in, no keychain item, no owner: the name plays as it is.
+    accounts
+        .play_as(Player::Offline("Builder_1".into()))
+        .unwrap();
+    assert_eq!(accounts.player(), Player::Offline("Builder_1".into()));
+    assert_eq!(accounts.name_arg(), Some("Builder_1"));
+    assert!(accounts.accounts.is_empty());
+    // Beside a signed-in owner too, and it survives the owner signing out.
     let mut accounts = signed_in(&store, &secrets("mc-token", true));
     accounts
-        .play_as(&store, Player::Offline("Builder_1".into()))
+        .play_as(Player::Offline("Builder_1".into()))
         .unwrap();
-    // Signing the last owner out keeps the name, which no longer plays.
     accounts.remove(&store, UUID).unwrap();
     assert_eq!(accounts.offline, ["Builder_1"]);
     assert_eq!(accounts.player(), Player::Offline("Builder_1".into()));
     assert!(!accounts.has_owner(&store));
+    // The check for online play and downloads still says no, but play itself never does.
     let (_, ep) = mock(|_| {});
     assert!(launch(&ep, Some("test-client"), &store, &mut accounts).is_err());
-    assert!(accounts
-        .play_as(&store, Player::Offline("Builder_2".into()))
-        .is_err());
+    accounts
+        .play_as(Player::Offline("Builder_2".into()))
+        .unwrap();
+    assert_eq!(accounts.player(), Player::Offline("Builder_2".into()));
+    accounts.play_as(Player::GameName).unwrap();
+    assert_eq!(accounts.player(), Player::GameName);
 }
 
 #[test]
@@ -610,23 +618,20 @@ fn offline_names_switch_with_accounts() {
     };
     assert_eq!(a.player(), Player::Microsoft("abc".into()));
     assert_eq!(a.name_arg(), None);
-    a.play_as(&store, Player::Offline("Builder_1".into()))
-        .unwrap();
+    a.play_as(Player::Offline("Builder_1".into())).unwrap();
     assert_eq!(a.player(), Player::Offline("Builder_1".into()));
     assert_eq!(a.name_arg(), Some("Builder_1"));
     // Kept once, as first written, whatever the case.
-    a.play_as(&store, Player::Offline("builder_1".into()))
-        .unwrap();
+    a.play_as(Player::Offline("builder_1".into())).unwrap();
     assert_eq!(a.offline, ["Builder_1"]);
     assert_eq!(a.name_arg(), Some("Builder_1"));
     assert!(a.add_offline("no spaces").is_err());
     assert!(a.add_offline("ab").is_err());
     assert!(a.add_offline("seventeen_letters").is_err());
-    a.play_as(&store, Player::Microsoft("abc".into())).unwrap();
+    a.play_as(Player::Microsoft("abc".into())).unwrap();
     assert_eq!(a.name_arg(), None, "an account plays with its own name");
-    assert!(a.play_as(&store, Player::Microsoft("zzz".into())).is_err());
-    a.play_as(&store, Player::Offline("Builder_1".into()))
-        .unwrap();
+    assert!(a.play_as(Player::Microsoft("zzz".into())).is_err());
+    a.play_as(Player::Offline("Builder_1".into())).unwrap();
     a.remove_offline("BUILDER_1").unwrap();
     assert_eq!(a.player(), Player::GameName);
     assert!(a.remove_offline("Builder_1").is_err());

@@ -1197,7 +1197,8 @@ fn preparer_binary(dir: &Path) -> Option<PathBuf> {
 
 /// Downloads the pinned version from Mojang into `dir` when an account in the launcher owns
 /// Minecraft (asked again now), else says what signing in would do, as the last line of the
-/// not-found error.
+/// not-found error. This is the only thing an account is needed for: the game itself plays
+/// offline, and a preparation from the player's own install needs no account either.
 fn download_for_owner(
     pins: &sources::Pins,
     dir: &Path,
@@ -1235,7 +1236,8 @@ fn download_for_owner(
         Ok(pass) => Err(format!(
             "\n  • Downloading {v} from Mojang needs your Microsoft account, which could not be \
              checked: {}",
-            pass.offline.unwrap_or_default()
+            pass.offline
+                .unwrap_or_else(|| "sign in with the account that owns Minecraft".into())
         )),
         Err(_) if !accounts.accounts.is_empty() => Err(
             "\n  • No signed-in account owns Minecraft: Java Edition, so Horizon can't download it."
@@ -1910,12 +1912,11 @@ pub fn need_prepared(tag: &str) -> Result<(), String> {
     }
 }
 
-/// The client's command, once the owner gate lets it start and its resources are prepared. Past
-/// the gate, a sign-in that can't be renewed (no network, expired) still lets the game start,
-/// offline.
+/// The client's command, once its resources are prepared. An offline name (or the game's own
+/// name) plays with no account at all; a signed-in account adds its session, and a sign-in that
+/// can't be renewed, or an account that doesn't own the game, still lets it start, offline.
 pub fn client(tag: &str) -> Result<Command, String> {
-    let (session, offline) = account::session_for_game(&game_home())
-        .map_err(|refused| format!("{refused} Sign in with `horizon-launcher account sign-in`."))?;
+    let (session, offline) = account::session_for_game(&game_home());
     need_prepared(tag)?;
     complete_assets(tag);
     crate::browser::horizon::before_play(&game_home());
@@ -1926,6 +1927,12 @@ pub fn client(tag: &str) -> Result<Command, String> {
     if let Some(e) = offline {
         eprintln!("Playing offline: {e}");
     }
+    // The offline name that plays, and its skin and cape: an account plays as itself.
+    let accounts = account::Accounts::load();
+    if let Some(name) = accounts.name_arg() {
+        cmd.arg("--name").arg(name);
+    }
+    cmd.envs(accounts.look_env());
     append_game_args(&mut cmd);
     Ok(cmd)
 }
@@ -2471,11 +2478,12 @@ pub enum Msg {
     Reused(Vec<(String, String)>),
     /// Whether secrets are kept in the OS keychain (else only until the launcher closes).
     Keychain(bool),
-    /// Whether an account in the launcher owned the game at its last check (the owner gate).
+    /// Whether an account in the launcher owned the game at its last check (online play and the
+    /// download's check).
     Owner(bool),
-    /// The owner gate's answer for the game about to start: the selected account's session
-    /// file (none = offline) and why it plays offline, if it does.
-    Session(Result<(Option<PathBuf>, Option<String>), crate::account::NoOwner>),
+    /// What the game about to start gets: the selected account's session file (none = offline)
+    /// and why it plays offline, if it does.
+    Session((Option<PathBuf>, Option<String>)),
     /// A modpack step's line (`modpacks`).
     PackLine(String),
     /// A modpack step ended: the pack as it now is.
@@ -2644,10 +2652,6 @@ pub struct Settings {
     /// first-run question, or on the Play page once if they answered that before it existed.
     #[serde(default)]
     pub ping_notice_seen: bool,
-    /// The player without an account that owns the game has read, once, why the launcher needs
-    /// one now (the owner gate's screen).
-    #[serde(default)]
-    pub owner_notice_seen: bool,
     /// Seconds the sidebar's partner banner has been on screen, over every start, up to
     /// `partner::SEEN_BEFORE_HIDE`: only then can the player hide it.
     #[serde(default)]

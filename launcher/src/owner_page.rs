@@ -1,17 +1,14 @@
-//! The owner gate in the window (`horizon_launcher::account::launch`): the screen that asks for a
-//! Microsoft account that owns Minecraft: Java Edition. It covers the launcher once for players
-//! without one (those who played offline before the gate), and again whenever Play is refused.
-//! The sign-in runs on it, code and all.
+//! The Microsoft account screen (`horizon_launcher::account::launch`): signing in for online
+//! play, the player's own name and skin, and the launcher's own download of Minecraft. Offline
+//! play needs no account, so nothing opens it but the player: Sign in on Home, or after a
+//! download that needed an account. The sign-in runs on it, code and all.
 use super::*;
 
 impl Launcher {
-    /// Whether the screen covers the window: no owner, and either Play was refused or the player
-    /// hasn't read it yet. The data question comes first.
+    /// Whether the screen covers the window: the player asked for it, and no question of consent
+    /// or opening is over it. The data question comes first.
     pub(crate) fn asking_owner(&self) -> bool {
-        self.owner == Some(false)
-            && (self.owner_screen_open || !self.settings.owner_notice_seen)
-            && !self.asking_consent()
-            && self.opening.is_none()
+        self.owner_screen_open && !self.asking_consent() && self.opening.is_none()
     }
 
     /// Opens the screen and starts the sign-in on it.
@@ -20,17 +17,13 @@ impl Launcher {
         self.start_sign_in();
     }
 
-    /// Closes it; it comes back with the next refused Play.
+    /// Closes it; it comes back with the next Sign in.
     fn close_owner_screen(&mut self) {
         if let Some(s) = self.sign_in.take() {
             s.cancel();
         }
         self.sign_in_state = None;
         self.owner_screen_open = false;
-        if !self.settings.owner_notice_seen {
-            self.settings.owner_notice_seen = true;
-            self.settings.save();
-        }
     }
 
     pub(crate) fn owner_screen(&mut self, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -48,7 +41,8 @@ impl Launcher {
                     .child(format!("{}.", tr(account::NEEDS_OWNER))),
             )
             .child(text(theme::UI).text_color(t.muted).child(tr(
-                "Horizon needs a Microsoft account that owns Minecraft: Java Edition, like other launchers.",
+                "Horizon plays offline with no account at all. Signing in adds online servers, \
+                 your own name and skin, and Horizon's own download of Minecraft from Mojang.",
             )))
             .child(text(theme::UI).text_color(t.muted).child(tr(
                 "Your worlds, offline names and settings stay where they are.",

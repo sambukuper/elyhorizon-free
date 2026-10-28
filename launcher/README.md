@@ -31,8 +31,9 @@ The opening, then Play ([clip](docs/opening.webm)):
   system's libraries, the asset index and the assets. Every file must have the size and sha1
   Mojang lists. The Play page shows how far it is and has Cancel; files already whole are kept,
   so the next try goes on from there. **From my install** prepares from the player's own launcher
-  instead, and an install that lacks the version falls back to the download. Without an owner,
-  the Play page asks to sign in first. `horizon-launcher prepare --download`.
+  instead, and an install that lacks the version falls back to the download, which needs a signed-in
+  account that owns the game: without one, the Play page says so and the install way still works.
+  `horizon-launcher prepare --download`.
 - **Mods**: search Modrinth (CurseForge support is coming soon) for resource
   packs and modpacks, each marked Works, Partly or Doesn't run in
   Horizon; Java mod jars are never offered. Install puts a pack and what it needs in
@@ -375,15 +376,17 @@ The window, the command line and the MCP server all call the same core, `src/bac
 
 ## Microsoft accounts
 
-The launcher starts the game only while a Microsoft account that owns Minecraft: Java Edition is
-signed in, as other launchers do: without one, Play (Home, instances, `horizon-launcher play`, the
-MCP's `play`) says "Sign in with a Microsoft account that owns Minecraft: Java Edition to play"
-and starts nothing. Settings → Accounts signs in: the launcher shows a code, you enter it at
+Playing offline needs no account at all: pick a name in Settings → Accounts (or
+`horizon-launcher account offline NAME`), or let the game use the name it makes up, and Play starts
+the game with that name. A Microsoft account adds three things: online-mode servers under your own
+name and skin, the launcher's own download of Minecraft from Mojang, and the ownership check those
+two need. Settings → Accounts signs in: the launcher shows a code, you enter it at
 microsoft.com/link, and the launcher checks that the account owns the game. It asks again at every
-Play, with the token renewal; with no network the last answer stands, and a "doesn't own" blocks
-at once. The account also plays online-mode servers under your own name and skin; offline names
-play LAN and offline-mode servers beside it. The game binary started directly (`horizon-client`,
-`horizon-ctl launch`), the harnesses and the servers don't go through this check. Tokens live in the system keychain (Keychain,
+Play of an account, with the token renewal; with no network the last answer stands. An account
+that doesn't own the game, or whose sign-in can't be renewed, doesn't stop the game: it starts
+offline and says why. Home keeps a Sign in row while no account here owns the game, and nothing
+covers the window on its own. The game binary started directly (`horizon-client`,
+`horizon-ctl launch`), the harnesses and the servers go through no check. Tokens live in the system keychain (Keychain,
 Credential Manager, or the Secret Service on Linux), never in a file, a log or the command line;
 `accounts.json` in the data folder keeps only names and UUIDs. Without a keychain you stay signed
 in until the launcher closes. When the game starts, it gets the session in a private file it

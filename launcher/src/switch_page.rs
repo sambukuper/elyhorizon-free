@@ -24,9 +24,7 @@ impl Launcher {
 
     pub(super) fn play_as(&mut self, who: Player) {
         let mut accounts = Accounts::load();
-        let done = accounts
-            .play_as(account::store(), who)
-            .and_then(|()| accounts.save());
+        let done = accounts.play_as(who).and_then(|()| accounts.save());
         match done {
             Ok(()) => self.accounts = accounts,
             Err(e) => self.sign_in_state = Some(SignInState::Done(Err(e))),
@@ -230,8 +228,8 @@ impl Launcher {
             Some(
                 div()
                     .child(tr(
-                        "Play offline under another name, and switch from the top bar. Online \
-                         servers don't take offline names.",
+                        "Play offline under any name, with or without an account, and switch from \
+                         the top bar. Online servers don't take offline names.",
                     ))
                     .into_any_element(),
             ),

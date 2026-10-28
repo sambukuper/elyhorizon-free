@@ -208,10 +208,11 @@ struct Launcher {
     sign_in: Option<SignIn>,
     sign_in_state: Option<SignInState>,
     keychain: bool,
-    /// Whether an account here owns the game, by the keychain's last answers (the owner gate);
-    /// none until the keychain has been read.
+    /// Whether an account here owns the game, by the keychain's last answers: what online play and
+    /// the launcher's own download need; none until the keychain has been read.
     owner: Option<bool>,
-    /// Play was refused (or Home's Sign in pressed): the owner gate's screen is open.
+    /// The player pressed Sign in: the Microsoft account screen is open. Home's row and Settings
+    /// open it; nothing else does, since offline play needs no account.
     owner_screen_open: bool,
     /// The game is waiting for its session (a token renewal) before it starts.
     starting_client: Option<String>,
@@ -648,19 +649,10 @@ impl Launcher {
                 Msg::Session(session) => {
                     if let Some(tag) = self.starting_client.take() {
                         let mut cmd = backend::client_command(&tag);
-                        let (file, offline) = match session {
-                            Ok(pass) => pass,
-                            Err(account::NoOwner) => {
-                                self.owner = Some(false);
-                                self.owner_screen_open = true;
-                                self.client_error = Some(format!("{}.", tr(account::NEEDS_OWNER)));
-                                self.starting_pack = None;
-                                self.joining = None;
-                                self.quick_play = None;
-                                continue;
-                            }
-                        };
-                        self.owner = Some(true);
+                        let (file, offline) = session;
+                        if file.is_some() {
+                            self.owner = Some(true);
+                        }
                         if let Some(file) = file {
                             cmd.arg("--session-file").arg(file);
                         }
@@ -924,10 +916,6 @@ impl Launcher {
                     self.owner = Some(true);
                     self.owner_screen_open = false;
                     self.client_error = None;
-                    if !self.settings.owner_notice_seen {
-                        self.settings.owner_notice_seen = true;
-                        self.settings.save();
-                    }
                 }
                 self.sign_in_state = Some(state);
                 changed = true;
@@ -2247,7 +2235,8 @@ impl Launcher {
                 &[("version", &version)],
             ),
             Some(false) => trf(
-                "Not prepared. Sign in with the Microsoft account that owns Minecraft {version} first.",
+                "Not prepared. Preparing uses your own Minecraft {version} install; Horizon's \
+                 download of it from Mojang needs an account that owns it.",
                 &[("version", &version)],
             ),
             None => backend::resources_summary(prepared, !silent, &version),
@@ -2347,14 +2336,17 @@ impl Launcher {
         {
             rows = rows.child(self.join_friend_row(prepared && !running, cx));
             // The top bar shows who plays; a row only when there is something to do about it:
-            // no account that owns the game (Play needs one), or offline.
+            // offline play with no account that owns the game, or offline beside one.
             if self.owner == Some(false) {
                 rows = rows.child(index_row(
                     5,
                     tr("Microsoft account"),
                     Some(
                         div()
-                            .child(format!("{}.", tr(account::NEEDS_OWNER)))
+                            .child(tr(
+                                "Playing offline. Online servers, and Horizon's own download of \
+                                 Minecraft, need an account that owns it.",
+                            ))
                             .into_any_element(),
                     ),
                     Some(
@@ -3293,7 +3285,8 @@ impl Launcher {
             Some(SignInState::Done(Ok(a))) => div().child(format!("Signed in as {}.", a.name)),
             Some(SignInState::Done(Err(e))) => div().text_color(t.danger).child(e.clone()),
             None if self.accounts.accounts.is_empty() => div().child(tr(
-                "Horizon needs a Microsoft account that owns Minecraft: Java Edition, like other launchers. It also plays online servers with your name and skin.",
+                "Horizon plays offline with no account at all. A Microsoft account adds online \
+                 servers, your own name and skin, and Horizon's own download of Minecraft.",
             )),
             None => div().child(tr("Add another account.")),
         };
