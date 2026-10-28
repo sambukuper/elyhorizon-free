@@ -1463,6 +1463,45 @@ fn disabled(b: Stateful<Div>) -> Stateful<Div> {
     b.opacity(theme::DISABLED).cursor_default().tab_stop(false)
 }
 
+/// What the Play row's big button does: the next step towards playing, whatever it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PrimaryAction {
+    /// The game runs: nothing to press.
+    Running,
+    /// The preparation runs: nothing to press yet.
+    Preparing,
+    /// The version is not prepared: the button prepares it from the player's own Minecraft.
+    Prepare,
+    /// Ready: the button starts the game.
+    Play,
+}
+
+impl PrimaryAction {
+    /// The button's label, in English: `button` translates it.
+    fn label(self) -> &'static str {
+        match self {
+            Self::Running => "Running",
+            Self::Preparing => "Preparing…",
+            Self::Prepare => "Prepare",
+            Self::Play => "Play",
+        }
+    }
+}
+
+/// The next step: prepare before play, and never a Play that can only fail. A disabled Play on a
+/// version that is not prepared reads as a button that does nothing.
+fn primary_action(running: bool, preparing: bool, prepared: bool) -> PrimaryAction {
+    if running {
+        PrimaryAction::Running
+    } else if preparing {
+        PrimaryAction::Preparing
+    } else if prepared {
+        PrimaryAction::Play
+    } else {
+        PrimaryAction::Prepare
+    }
+}
+
 /// A page's title in the pixel face and one line on what it is for.
 fn page_header(title: &str, description: &str, t: &Theme) -> Div {
     div()
@@ -2177,9 +2216,9 @@ impl Launcher {
         let version = backend::game_version(&tag);
         let hero = self.hero(&tag, &version, prepared, cx);
         let running = self.client.is_some() || self.starting_client.is_some();
-        let play_label = if running { "Running" } else { "Play" };
+        let action = primary_action(running, self.preparing, prepared);
         // The label clears the icon in every language ("Играть" is wider than "Play").
-        let mut play = button("play", play_label, Kind::Primary, &t)
+        let mut play = button("play", action.label(), Kind::Primary, &t)
             .min_w(px(200.))
             .h(px(60.))
             .pl(px(60.))
@@ -2193,14 +2232,24 @@ impl Launcher {
                     .top(px(17.))
                     .child(blocks::icon("play", 22., t.on_face)),
             );
-        if !prepared || self.preparing || running {
-            play = disabled(play);
-        } else {
-            play = play.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.picker_open = false;
-                this.play();
-                cx.notify();
-            }));
+        match action {
+            PrimaryAction::Running | PrimaryAction::Preparing => play = disabled(play),
+            // A version that is not prepared has nothing to start yet: this button prepares it
+            // from the player's own Minecraft, and turns back into Play when that is done.
+            PrimaryAction::Prepare => {
+                play = play.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.picker_open = false;
+                    this.prepare(backend::MinecraftFrom::Install);
+                    cx.notify();
+                }))
+            }
+            PrimaryAction::Play => {
+                play = play.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.picker_open = false;
+                    this.play();
+                    cx.notify();
+                }))
+            }
         }
         let actions = div()
             .flex()
@@ -2223,8 +2272,8 @@ impl Launcher {
                     .child(play),
             );
 
-        // Not prepared: an owner can have ElyHorizon download Minecraft from Mojang; without an
-        // owner there is nothing to play, so signing in comes first.
+        // Not prepared: anyone can prepare it from their own Minecraft install, and an account
+        // that owns the game adds ElyHorizon's own download of it from Mojang.
         let first = (!prepared && !self.preparing)
             .then_some(self.owner)
             .flatten();
@@ -2283,14 +2332,25 @@ impl Launcher {
                         cx.notify();
                     })),
                 ),
-            Some(false) => div().child(
-                button("prepare-sign-in", "Sign in", Kind::Secondary, &t).on_click(cx.listener(
-                    |this, _: &ClickEvent, _, cx| {
-                        this.sign_in_to_play();
-                        cx.notify();
-                    },
-                )),
-            ),
+            Some(false) => div()
+                .flex()
+                .gap(px(8.))
+                .child(
+                    button("prepare", "Prepare", Kind::Secondary, &t).on_click(cx.listener(
+                        |this, _: &ClickEvent, _, cx| {
+                            this.prepare(backend::MinecraftFrom::Install);
+                            cx.notify();
+                        },
+                    )),
+                )
+                .child(
+                    button("prepare-sign-in", "Sign in", Kind::Ghost, &t).on_click(cx.listener(
+                        |this, _: &ClickEvent, _, cx| {
+                            this.sign_in_to_play();
+                            cx.notify();
+                        },
+                    )),
+                ),
             None => div().child(prepare),
         };
         let minecraft = self.settings.minecraft_dir.as_deref().map_or_else(
@@ -4223,6 +4283,24 @@ mod tests {
             &menus[0].items[0],
             gpui::MenuItem::Action { name, .. } if name == "Quit ElyHorizon Launcher"
         ));
+    }
+
+    #[test]
+    fn the_play_row_prepares_before_it_plays() {
+        use super::{primary_action, PrimaryAction};
+        // A version nobody prepared yet: the big button prepares it, so it never looks dead.
+        assert_eq!(primary_action(false, false, false), PrimaryAction::Prepare);
+        assert_eq!(
+            primary_action(false, false, false).label(),
+            "Prepare",
+            "the button says what it does"
+        );
+        // While it prepares, and while the game runs, there is nothing to press.
+        assert_eq!(primary_action(false, true, false), PrimaryAction::Preparing);
+        assert_eq!(primary_action(false, true, true), PrimaryAction::Preparing);
+        assert_eq!(primary_action(true, false, true), PrimaryAction::Running);
+        // Prepared: Play.
+        assert_eq!(primary_action(false, false, true), PrimaryAction::Play);
     }
 
     #[test]
