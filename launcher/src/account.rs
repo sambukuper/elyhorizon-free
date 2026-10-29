@@ -212,7 +212,10 @@ pub enum Poll {
 pub fn device_code(ep: &Endpoints, client_id: &str) -> Result<DeviceCode, String> {
     let (status, v) = send(
         request_to("POST", &format!("{}/devicecode", ep.microsoft)),
-        Some(Body::Form(vec![("client_id", client_id), ("scope", MSA_SCOPE)])),
+        Some(Body::Form(vec![
+            ("client_id", client_id),
+            ("scope", MSA_SCOPE),
+        ])),
         "Microsoft",
     )?;
     match (
@@ -232,22 +235,26 @@ pub fn device_code(ep: &Endpoints, client_id: &str) -> Result<DeviceCode, String
             expires_at: now() + v.get("expires_in").and_then(Value::as_u64).unwrap_or(900),
             device_code,
         }),
-        _ => Err(oauth_error(&v)),
+        _ => Err(oauth_error(&v, AccountProvider::Microsoft)),
     }
 }
 
-/// The OAuth error codes as messages for the player.
-fn oauth_error(v: &Value) -> String {
+/// The OAuth error codes as messages for the player, naming the provider that answered so an
+/// Ely.by failure is never read as a Microsoft one.
+fn oauth_error(v: &Value, provider: AccountProvider) -> String {
+    let who = provider.label();
     match v.get("error").and_then(Value::as_str) {
         Some("authorization_declined") => "Sign-in was declined in the browser.".into(),
         Some("expired_token") => "The sign-in code expired. Start again.".into(),
         Some("bad_verification_code") => "The sign-in code was not recognised. Start again.".into(),
-        Some("invalid_grant") => SIGN_IN_AGAIN.into(),
+        // A device-code exchange answers invalid_grant for an unknown or expired code (Ely.by does);
+        // only Microsoft's token refresh uses it for a spent refresh token.
+        Some("invalid_grant") if provider == AccountProvider::Microsoft => SIGN_IN_AGAIN.into(),
         Some("invalid_client" | "unauthorized_client") => {
-            "Microsoft refused this launcher's app registration (client ID).".into()
+            format!("{who} refused this launcher's app registration (client ID).")
         }
-        Some(other) => format!("Microsoft sign-in failed ({other})."),
-        None => "Microsoft sign-in failed.".into(),
+        Some(other) => format!("{who} sign-in failed ({other})."),
+        None => format!("{who} sign-in failed."),
     }
 }
 
@@ -277,7 +284,7 @@ fn ms_tokens(status: u16, v: &Value) -> Result<MsTokens, String> {
         str_field(v, "refresh_token"),
     ) {
         (200, Some(access), Some(refresh)) => Ok(MsTokens { access, refresh }),
-        _ => Err(oauth_error(v)),
+        _ => Err(oauth_error(v, AccountProvider::Microsoft)),
     }
 }
 
@@ -432,7 +439,8 @@ impl std::fmt::Debug for ElyDeviceCode {
 /// Requests a device code from Ely.by.
 pub fn ely_device_code(ep: &Endpoints, client_id: &str) -> Result<ElyDeviceCode, String> {
     let (status, v) = send(
-        request_to("POST", &format!("{}/devicecode", ep.ely_device_code)),
+        // The Ely.by fields are full URLs (like `ely_profile`), unlike Microsoft's base one.
+        request_to("POST", &ep.ely_device_code),
         Some(Body::Form(vec![
             ("client_id", client_id),
             ("scope", ELY_SCOPE),
@@ -456,7 +464,7 @@ pub fn ely_device_code(ep: &Endpoints, client_id: &str) -> Result<ElyDeviceCode,
             expires_at: now() + v.get("expires_in").and_then(Value::as_u64).unwrap_or(900),
             device_code,
         }),
-        _ => Err(oauth_error(&v)),
+        _ => Err(oauth_error(&v, AccountProvider::Ely)),
     }
 }
 
@@ -467,7 +475,7 @@ pub fn ely_poll(
     code: &ElyDeviceCode,
 ) -> Result<Option<String>, String> {
     let (_status, v) = send(
-        request_to("POST", &format!("{}/token", ep.ely_token)),
+        request_to("POST", &ep.ely_token),
         Some(Body::Form(vec![
             ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
             ("client_id", client_id),
@@ -478,7 +486,9 @@ pub fn ely_poll(
     match v.get("error").and_then(Value::as_str) {
         Some("authorization_pending") => Ok(None),
         Some("slow_down") => Ok(None),
-        Some(other) => Err(format!("Ely.by sign-in failed: {other}")),
+        // The same player-facing messages as the rest of the flow, named as Ely.by's (an
+        // invalid_grant here is an unknown or expired code, not a spent refresh token).
+        Some(_) => Err(oauth_error(&v, AccountProvider::Ely)),
         None => {
             // Success - extract the access token
             str_field(&v, "access_token")
@@ -516,10 +526,9 @@ pub fn ely_wait_for_sign_in(
 
 /// Completes the Ely.by sign-in flow and creates the account and secrets.
 pub fn finish_ely_sign_in(ep: &Endpoints, ely_token: String) -> Result<(Account, Secrets), String> {
-    // Ely.by's token is already a Minecraft access token: the same services answer for it.
-    if !owns_game(ep, &ely_token)? {
-        return Err(DOES_NOT_OWN.into());
-    }
+    // Ely.by's token is already a Minecraft access token: it authenticates the user against the
+    // Minecraft services directly. The entitlements endpoint needs a Microsoft XSTS token, so it
+    // can't be used here; the profile is the proof that the account is valid.
     let account = profile(ep, &ely_token, AccountProvider::Ely)?.ok_or(NO_PROFILE)?;
     Ok((
         account,
@@ -540,7 +549,12 @@ fn bearer(request: ureq::Request, token: &str) -> ureq::Request {
 }
 
 /// Whether the account owns Minecraft: Java Edition (Game Pass included).
-fn owns_game(ep: &Endpoints, token: &str) -> Result<bool, String> {
+/// Returns `Some(false)` if the services explicitly said the account has no Minecraft entitlement
+/// (or answered 404), `Some(true)` if it does, and `Ok(None)` if ownership can't be determined
+/// (services answered with an unexpected status). Returns `Err` only when the services can't be
+/// reached at all (network failure): the caller must surface that error as a message but must not
+/// refuse sign-in — ownership is decided later by check().
+fn owns_game(ep: &Endpoints, token: &str) -> Result<Option<bool>, String> {
     let (status, v) = send(
         bearer(
             request_to("GET", &format!("{}/entitlements/mcstore", ep.minecraft)),
@@ -549,19 +563,22 @@ fn owns_game(ep: &Endpoints, token: &str) -> Result<bool, String> {
         None,
         "the Minecraft services",
     )?;
-    if status != 200 {
-        return Err("Could not check which games this account owns.".into());
+    if status == 404 {
+        return Ok(Some(false));
     }
-    Ok(v.get("items")
-        .and_then(Value::as_array)
-        .is_some_and(|items| {
+    if status != 200 {
+        return Ok(None);
+    }
+    Ok(Some(v.get("items").and_then(Value::as_array).is_some_and(
+        |items| {
             items.iter().any(|i| {
                 matches!(
                     i.get("name").and_then(Value::as_str),
                     Some("game_minecraft" | "product_minecraft")
                 )
             })
-        }))
+        },
+    )))
 }
 
 /// Account provider type.
@@ -604,16 +621,19 @@ pub struct Account {
 }
 
 /// The profile; none when the account has none (it doesn't own the game, or never made one).
-fn profile(ep: &Endpoints, token: &str, provider: AccountProvider) -> Result<Option<Account>, String> {
-    let url = match provider {
-        AccountProvider::Microsoft => format!("{}/minecraft/profile", ep.minecraft),
-        AccountProvider::Ely => ep.ely_profile.clone(),
+fn profile(
+    ep: &Endpoints,
+    token: &str,
+    provider: AccountProvider,
+) -> Result<Option<Account>, String> {
+    let (url, service) = match provider {
+        AccountProvider::Microsoft => (
+            format!("{}/minecraft/profile", ep.minecraft),
+            "the Minecraft services",
+        ),
+        AccountProvider::Ely => (ep.ely_profile.clone(), "Ely.by"),
     };
-    let (status, v) = send(
-        bearer(request_to("GET", &url), token),
-        None,
-        "the Minecraft services",
-    )?;
+    let (status, v) = send(bearer(request_to("GET", &url), token), None, service)?;
     if status == 404 {
         return Ok(None);
     }
@@ -674,8 +694,10 @@ impl std::fmt::Debug for Secrets {
 /// From Microsoft tokens to a ready account: Xbox, XSTS, Minecraft, ownership, profile.
 pub fn finish_sign_in(ep: &Endpoints, ms: MsTokens) -> Result<(Account, Secrets), String> {
     let mc = minecraft_login(ep, &ms.access)?;
-    if !owns_game(ep, &mc.token)? {
-        return Err(DOES_NOT_OWN.into());
+    match owns_game(ep, &mc.token) {
+        Ok(Some(false)) => return Err(DOES_NOT_OWN.into()),
+        Ok(None) | Ok(Some(true)) | Err(_) => {} // can't check / services down: let the token
+                                                 // through, owns will be decided later by check()
     }
     let account = profile(ep, &mc.token, AccountProvider::Microsoft)?.ok_or(NO_PROFILE)?;
     Ok((account, Secrets::new(ms.refresh, mc)))
@@ -728,26 +750,50 @@ fn check(ep: &Endpoints, client_id: Option<&str>, account: &Account, secrets: Se
         }
     }
     let token = &secrets.minecraft_token;
-    match owns_game(ep, token).and_then(|owns| {
-        Ok(if owns {
-            profile(ep, token, secrets.provider)?
-        } else {
-            None
-        })
-    }) {
-        Err(e) => Check::NoAnswer(e, secrets),
-        Ok(None) => Check::DoesNot(Secrets {
+    if secrets.provider == AccountProvider::Ely {
+        // The entitlements endpoint answers a Microsoft XSTS token, not Ely.by's: it 404s/401s
+        // even for a valid Ely.by account, so ownership is decided by the profile instead.
+        return match profile(ep, token, AccountProvider::Ely) {
+            Err(e) => Check::NoAnswer(e, secrets),
+            Ok(None) => Check::DoesNot(Secrets {
+                owns: false,
+                ..secrets
+            }),
+            Ok(Some(p)) if p.uuid != account.uuid => Check::NoAnswer(OTHER_PROFILE.into(), secrets),
+            Ok(Some(p)) => Check::Owns(
+                p,
+                Secrets {
+                    owns: true,
+                    ..secrets
+                },
+            ),
+        };
+    }
+    match owns_game(ep, token) {
+        Ok(Some(false)) => Check::DoesNot(Secrets {
             owns: false,
             ..secrets
         }),
-        Ok(Some(p)) if p.uuid != account.uuid => Check::NoAnswer(OTHER_PROFILE.into(), secrets),
-        Ok(Some(p)) => Check::Owns(
-            p,
-            Secrets {
-                owns: true,
-                ..secrets
-            },
+        Ok(None) => Check::NoAnswer(
+            "Could not check which games this account owns. Trying again next time.".into(),
+            secrets,
         ),
+        Err(e) => Check::NoAnswer(e, secrets),
+        Ok(Some(true)) => match profile(ep, token, secrets.provider) {
+            Err(e) => Check::NoAnswer(e, secrets),
+            Ok(None) => Check::DoesNot(Secrets {
+                owns: false,
+                ..secrets
+            }),
+            Ok(Some(p)) if p.uuid != account.uuid => Check::NoAnswer(OTHER_PROFILE.into(), secrets),
+            Ok(Some(p)) => Check::Owns(
+                p,
+                Secrets {
+                    owns: true,
+                    ..secrets
+                },
+            ),
+        },
     }
 }
 
@@ -1294,13 +1340,29 @@ pub fn write_session_file(
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
     let mut file = options.open(&path).map_err(|e| e.to_string())?;
-    let body = json!({
+    let mut body = json!({
         "name": account.name,
         "uuid": account.uuid,
         "access_token": secrets.minecraft_token,
         "user_type": "msa",
         "xuid": secrets.xuid,
+        // The provider the game plays as: an Ely.by account's profiles and
+        // skins resolve through Ely.by, whose accounts Minecraft's services
+        // don't know.
+        "provider": match account.provider {
+            AccountProvider::Ely => "ely",
+            AccountProvider::Microsoft => "microsoft",
+        },
     });
+    // The profile's own textures, handed to the game as is: for an account the
+    // Minecraft services don't know (Ely.by) they are the only source of the skin.
+    if let Some((url, model)) = &account.skin {
+        body["skin"] = json!(url);
+        body["skin_model"] = json!(model);
+    }
+    if let Some(cape) = &account.cape {
+        body["cape"] = json!(cape);
+    }
     std::io::Write::write_all(&mut file, body.to_string().as_bytes()).map_err(|e| e.to_string())?;
     Ok(path)
 }
@@ -1370,7 +1432,9 @@ impl SignIn {
                     AccountProvider::Microsoft => {
                         let client_id = client_id().ok_or(NOT_CONFIGURED)?;
                         let code = device_code(&ep, &client_id)?;
-                        set(SignInState::Code(DeviceCodeVariant::Microsoft(code.clone())));
+                        set(SignInState::Code(DeviceCodeVariant::Microsoft(
+                            code.clone(),
+                        )));
                         let ms = wait_for_sign_in(&ep, &client_id, &code, &|| {
                             thread_cancel.load(Ordering::Relaxed)
                         })?;
@@ -1397,7 +1461,11 @@ impl SignIn {
             })();
             set(SignInState::Done(result));
         });
-        Self { state, cancel, provider }
+        Self {
+            state,
+            cancel,
+            provider,
+        }
     }
     pub fn state(&self) -> SignInState {
         self.state.lock().unwrap().clone()

@@ -30,6 +30,33 @@ pub const TEXTURE_URIS: [&str; 2] = [
     "http://textures.minecraft.net/texture/{textureId}",
 ];
 
+/// The hosts textures may come from besides Minecraft's own: Ely.by's skin
+/// system, which an Ely.by profile's textures name
+/// (`http://ely.by/storage/skins/<hash>.png`). Its API metadata lists these
+/// as `skinDomains`, and authlib-injector lets a Java client load them too;
+/// an entry starting with `.` matches the domain and its subdomains.
+pub const SKIN_DOMAINS: [&str; 2] = ["ely.by", ".ely.by"];
+
+/// Whether `url`'s host is one of `domains` (a leading dot allows the bare
+/// domain and any subdomain of it).
+fn host_allowed(url: &str, domains: &[&str]) -> bool {
+    let Some((_, rest)) = url.split_once("://") else {
+        return false;
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, h)| h)
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .trim_end_matches('.');
+    domains.iter().any(|d| match d.strip_prefix('.') {
+        Some(suffix) => host == suffix || host.ends_with(&format!(".{suffix}")),
+        None => host == *d,
+    })
+}
+
 /// `java.util.Base64.getDecoder().decode`.
 pub fn base64_decode(text: &str) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(text.len() / 4 * 3);
@@ -99,7 +126,8 @@ pub fn unpack(value: &str, signature: Signature, valid_uris: &[&str]) -> Texture
         };
         let allowed = valid_uris
             .iter()
-            .any(|u| url.starts_with(&u.replace("{textureId}", "")));
+            .any(|u| url.starts_with(&u.replace("{textureId}", "")))
+            || host_allowed(url, &SKIN_DOMAINS);
         if !allowed {
             return empty;
         }
@@ -1040,6 +1068,30 @@ mod tests {
         assert_eq!(
             super::profile_uuid_nbt(&text_id),
             Some(u128::from_str_radix("e843a1f4000000010000000200000003", 16).unwrap())
+        );
+    }
+
+    #[test]
+    fn ely_by_skins_are_allowed() {
+        use super::{SKIN_DOMAINS, Signature, TEXTURE_URIS, host_allowed, unpack};
+        assert!(host_allowed(
+            "http://ely.by/storage/skins/abc.png",
+            &SKIN_DOMAINS
+        ));
+        // A leading dot allows subdomains too (Ely.by's `skinDomains`).
+        assert!(host_allowed(
+            "https://skinsystem.ely.by/textures/abc.png",
+            &SKIN_DOMAINS
+        ));
+        assert!(!host_allowed("http://evil.example/abc.png", &SKIN_DOMAINS));
+        assert!(!host_allowed("http://notely.by/abc.png", &SKIN_DOMAINS));
+        // Its textures payload keeps the skin, which Minecraft's own URIs reject.
+        let value = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly9lbHkuYnkvc3RvcmFnZS9za2lucy9hYmMucG5nIn19fQ==";
+        assert_eq!(
+            unpack(value, Signature::Signed, &TEXTURE_URIS)
+                .skin
+                .as_deref(),
+            Some("http://ely.by/storage/skins/abc.png")
         );
     }
 

@@ -109,8 +109,9 @@ Vanilla's launcher passes `--accessToken <token>` on the command line, where eve
 machine can read it in the process list. Horizon keeps it out of argv:
 
 - The launcher writes `session-<random>.json` (mode 0600 on Unix, created new, in the game home's
-  `sessions/` folder) with `{"name", "uuid", "access_token", "user_type": "msa", "xuid"}` and starts
-  the game with `--session-file PATH`.
+  `sessions/` folder) with `{"name", "uuid", "access_token", "user_type": "msa", "xuid", "provider",
+  "skin", "skin_model", "cape"}` (`skin`/`cape` only when the profile has them) and starts the game
+  with `--session-file PATH`.
 - The game reads the file at start and deletes it at once; the token lives only in the game's memory.
   A file older than two minutes is refused (and deleted), so a stale file can't be replayed.
 - Without a session file the game is offline as today (`--name`, offline UUID).
@@ -154,12 +155,24 @@ a local mock.
 ## Skins and capes
 
 Profile properties (`textures`, base64 JSON) arrive in `ClientboundPlayerInfoUpdatePacket` for every
-player and in the login profile for ourselves. Like authlib's `unpackTextures`, only URLs under the
-discovery document's `profiles/getTexture` `validUris` (textures.minecraft.net) are fetched; skins
-(classic/slim from the `metadata.model`), capes and elytra textures are downloaded over HTTPS on a
-worker thread, cached on disk by texture hash (`assets/skins/xx/hash`, like vanilla's
-`SkinManager`), converted from legacy 64×32 the way `SkinTextureDownloader` does and given to the
-player renderer. Until a skin arrives the default skin for the UUID shows (as today).
+player and in the login profile for ourselves. Like authlib's `unpackTextures`, URLs under the
+discovery document's `profiles/getTexture` `validUris` (textures.minecraft.net) are fetched, and so
+are Ely.by's (`ely.by`, its subdomains — the `skinDomains` its API metadata lists, which is how
+authlib-injector lets a Java client load them); skins (classic/slim from the `metadata.model`),
+capes and elytra textures are downloaded on a worker thread, cached on disk by texture hash
+(`assets/skins/xx/hash`, like vanilla's `SkinManager`), converted from legacy 64×32 the way
+`SkinTextureDownloader` does and given to the player renderer. Until a skin arrives the default skin
+for the UUID shows (as today).
+
+An Ely.by session (`"provider": "ely"` in the session file) resolves profiles through Ely.by's
+Yggdrasil API instead of Mojang's, which doesn't know Ely.by accounts:
+
+- the account's own profile (`getProfileById` with its UUID) gives the local player its skin and cape;
+- a player the server sent no `textures` for (an offline-mode server, or one without a skin plugin)
+  is resolved by name (`profiles/getByName` → `session/getProfileById`), so two Ely.by players on
+  such a server see each other's skins. Textures the server did send are kept.
+
+Minecraft sessions are unchanged: Mojang's discovery, `textures.minecraft.net` only.
 
 ## Chat signing
 

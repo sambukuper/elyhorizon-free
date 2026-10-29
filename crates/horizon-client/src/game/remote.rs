@@ -3087,19 +3087,24 @@ impl Game<'_> {
             .collect();
         Some((players, r.online_mode, upside_down))
     }
-    /// The signed-in account's `textures`, once the services answered.
+    /// The signed-in account's `textures`: the services' answer once it names a
+    /// skin, else the account's own textures as the launcher's profile gave them
+    /// (an account the services don't know — Ely.by — has its skin only there).
     fn own_textures(&self) -> Option<horizon_client::skins::Textures> {
         use horizon_client::skins::{self, NameOrId, Resolve};
         let auth = horizon_client::auth::current()?;
-        let state = self
+        let services = self
             .skin_profiles
             .borrow_mut()
             .state(&NameOrId::Id(auth.uuid));
-        let Resolve::Done(Some(profile)) = state else {
-            return None;
+        let from_services = match services {
+            Resolve::Done(Some(profile)) => profile
+                .textures()
+                .map(|(value, signature)| skins::unpack(&value, signature, &skins::TEXTURE_URIS))
+                .filter(|t| t.skin.is_some()),
+            _ => None,
         };
-        let (value, signature) = profile.textures()?;
-        Some(skins::unpack(&value, signature, &skins::TEXTURE_URIS))
+        from_services.or_else(|| auth.own_textures())
     }
     /// `PlayerInfo.getSkin` for every player entity, including NPCs that are
     /// never in the tab list: resolve each profile's textures and give the
@@ -3122,6 +3127,38 @@ impl Game<'_> {
         {
             entries.retain(|(u, _)| *u != local);
             entries.push((local, own));
+        }
+        // An Ely.by account's server may not know its players' skins (an
+        // offline-mode server, or one without an Ely.by skin plugin sends no
+        // `textures`): resolve each named player's profile through Ely.by, so
+        // two Ely.by players on it see each other's skins. Players the server
+        // did give textures for keep them.
+        if horizon_client::auth::current().is_some_and(|s| s.is_ely()) {
+            use horizon_client::skins::{NameOrId, Resolve};
+            let missing: Vec<(u128, String)> = r
+                .players
+                .iter()
+                .filter(|(uuid, _)| {
+                    **uuid != local && !entries.iter().any(|(u, t)| u == *uuid && t.skin.is_some())
+                })
+                .map(|(uuid, name)| (*uuid, name.clone()))
+                .collect();
+            for (uuid, name) in missing {
+                if let Resolve::Done(Some(profile)) =
+                    self.skin_profiles.borrow_mut().state(&NameOrId::Name(name))
+                    && let Some((value, signature)) = profile.textures()
+                {
+                    let textures = horizon_client::skins::unpack(
+                        &value,
+                        signature,
+                        &horizon_client::skins::TEXTURE_URIS,
+                    );
+                    if textures.skin.is_some() {
+                        entries.retain(|(u, _)| *u != uuid);
+                        entries.push((uuid, textures));
+                    }
+                }
+            }
         }
         let mut resolved: Vec<(u128, String)> = Vec::new();
         // PlayerSkin.model of each resolved skin: the textures' `slim`.

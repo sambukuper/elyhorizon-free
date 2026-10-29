@@ -20,6 +20,14 @@ pub struct AuthSession {
     pub uuid: u128,
     pub xuid: Option<String>,
     access_token: String,
+    /// The account's own textures the launcher's profile named: the skin's
+    /// `(url, model)` and the cape's url. An account the Minecraft services
+    /// don't know (Ely.by) has its skin only from here.
+    own_skin: Option<(String, String)>,
+    own_cape: Option<String>,
+    /// The account is Ely.by's: its profiles, skins and server joins resolve
+    /// through Ely.by's Yggdrasil API, not Minecraft's services.
+    ely: bool,
 }
 impl std::fmt::Debug for AuthSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -47,6 +55,9 @@ impl AuthSession {
             uuid,
             xuid: None,
             access_token: access_token.to_owned(),
+            own_skin: None,
+            own_cape: None,
+            ely: false,
         }
     }
     /// The session file's JSON: {"name", "uuid", "access_token", "user_type": "msa", "xuid"}.
@@ -67,11 +78,42 @@ impl AuthSession {
         if field("user_type").is_some_and(|t| t != "msa") {
             return Err("the session file is not a Microsoft account session".into());
         }
+        // The profile's own textures, when the launcher wrote them: the skin's
+        // url and model, else the model is the wide (classic) one.
+        let own_skin = match (field("skin"), field("skin_model")) {
+            (Some(url), model) if !url.is_empty() => {
+                Some((url.to_owned(), model.unwrap_or("classic").to_owned()))
+            }
+            _ => None,
+        };
+        let own_cape = field("cape").filter(|c| !c.is_empty()).map(str::to_owned);
+        let ely = field("provider").is_some_and(|p| p.eq_ignore_ascii_case("ely"));
         Ok(Self {
             name: name.to_owned(),
             uuid,
             xuid: field("xuid").map(str::to_owned),
             access_token: access_token.to_owned(),
+            own_skin,
+            own_cape,
+            ely,
+        })
+    }
+    /// The account is Ely.by's, so the services it uses are Ely.by's.
+    pub fn is_ely(&self) -> bool {
+        self.ely
+    }
+    /// The account's own textures, when the launcher's profile named them: the
+    /// skin the profile gave. Never required to be signed: the local player's
+    /// own skin may be unsigned, and an account the services don't know has no
+    /// signed one to begin with.
+    pub fn own_textures(&self) -> Option<crate::skins::Textures> {
+        let (url, model) = self.own_skin.clone()?;
+        Some(crate::skins::Textures {
+            skin: Some(url),
+            slim: model == "slim",
+            cape: self.own_cape.clone(),
+            elytra: None,
+            signed: false,
         })
     }
     /// Read the session file the launcher wrote and delete it at once. It
@@ -162,6 +204,33 @@ impl JoinError {
     }
 }
 
+/// Ely.by's Yggdrasil API root: the same one authlib-injector points a Java
+/// client at. Its paths (`api/users/profiles/minecraft/<name>`,
+/// `sessionserver/session/minecraft/profile/<uuid>`, `.../join`, `.../hasJoined`)
+/// are the endpoints below.
+pub const ELY_API_ROOT: &str = "https://account.ely.by/api/authlib-injector";
+
+/// A discovery document standing in for Minecraft's services one, naming
+/// Ely.by's Yggdrasil endpoints. Ely.by serves no Minecraft services
+/// discovery document, but the same `getUrl(service, endpoint)` lookups drive
+/// it: profile resolution, joining an online server and its verification.
+fn ely_discovery() -> Arc<serde_json::Value> {
+    static DOC: OnceLock<Arc<serde_json::Value>> = OnceLock::new();
+    DOC.get_or_init(|| {
+        Arc::new(serde_json::json!({"discovery": {
+            "profiles": {"endpoints": {
+                "getByName": {"uri": format!("{ELY_API_ROOT}/api/users/profiles/minecraft/{{name}}")}
+            }},
+            "session": {"endpoints": {
+                "getProfileById": {"uri": format!("{ELY_API_ROOT}/sessionserver/session/minecraft/profile/{{profileId}}")},
+                "join": {"uri": format!("{ELY_API_ROOT}/sessionserver/session/minecraft/join")},
+                "verify": {"uri": format!("{ELY_API_ROOT}/sessionserver/session/minecraft/hasJoined")}
+            }}
+        }}))
+    })
+    .clone()
+}
+
 /// The services discovery document URL: `HORIZON_API_DISCOVERY` overrides
 /// it like authlib's `-Dminecraft.api.discovery.host`.
 pub fn discovery_url() -> String {
@@ -180,6 +249,11 @@ fn agent() -> ureq::Agent {
 
 /// The discovery document, fetched once per game (a failure is retried next time).
 pub(crate) fn discovery() -> Result<Arc<serde_json::Value>, JoinError> {
+    // An Ely.by account's services are Ely.by's: its Yggdrasil API knows the
+    // accounts and skins Minecraft's services do not.
+    if current().is_some_and(|s| s.is_ely()) {
+        return Ok(ely_discovery());
+    }
     static CACHE: Mutex<Option<Arc<serde_json::Value>>> = Mutex::new(None);
     if let Some(d) = CACHE.lock().unwrap().clone() {
         return Ok(d);
@@ -384,6 +458,34 @@ mod tests {
         assert!(AuthSession::parse(r#"{"name":"A","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"t","user_type":"legacy"}"#).is_err());
         let s = AuthSession::parse(r#"{"name":"A","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"t","xuid":"25"}"#).unwrap();
         assert_eq!(s.xuid.as_deref(), Some("25"));
+    }
+
+    #[test]
+    fn an_ely_session_resolves_through_ely_by() {
+        let s = AuthSession::parse(
+            r#"{"name":"A","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"t","provider":"ely"}"#,
+        )
+        .unwrap();
+        assert!(s.is_ely());
+        let d = ely_discovery();
+        assert_eq!(
+            endpoint(&d, "profiles", "getByName").as_deref(),
+            Some("https://account.ely.by/api/authlib-injector/api/users/profiles/minecraft/{name}")
+        );
+        assert_eq!(
+            endpoint(&d, "session", "getProfileById").as_deref(),
+            Some(
+                "https://account.ely.by/api/authlib-injector/sessionserver/session/minecraft/profile/{profileId}"
+            )
+        );
+        assert!(endpoint(&d, "session", "join").is_some());
+        assert!(endpoint(&d, "session", "verify").is_some());
+        // A Microsoft session (or one from before the field existed) is not.
+        let ms = AuthSession::parse(
+            r#"{"name":"A","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"t"}"#,
+        )
+        .unwrap();
+        assert!(!ms.is_ely());
     }
 
     #[test]

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 const UUID: &str = "069a79f444e94726a5befca90e38aaf5";
 const SCOPE: &str = "XboxLive.signin offline_access";
+const ELY_SCOPE_TEST: &str = "account_info offline_access minecraft_server_session";
 
 /// What the mock answers and what it was asked.
 #[derive(Default)]
@@ -16,6 +17,9 @@ struct Mock {
     xerr: Option<u64>,
     owns_game: bool,
     no_profile: bool,
+    /// The Ely.by device-code exchange says invalid_grant for an unknown or expired code; set to
+    /// answer that way instead of handing out a token.
+    ely_invalid_grant: bool,
     /// Every request: method, path and body.
     log: Vec<(String, String, String)>,
 }
@@ -32,12 +36,21 @@ fn route(mock: &mut Mock, method: &str, path: &str, auth: &str, body: &str) -> (
             .map(|(_, v)| v.replace('+', " ").replace("%3A", ":").replace("%20", " "))
     };
     match (method, path) {
-        ("POST", "/ms/devicecode") => {
+        ("POST", "/ms/devicecode") | ("POST", "/ely/devicecode") => {
+            let ely = path == "/ely/devicecode";
             assert_eq!(form("client_id").as_deref(), Some("test-client"));
-            assert_eq!(form("scope").as_deref(), Some(SCOPE));
+            assert_eq!(
+                form("scope").as_deref(),
+                Some(if ely { ELY_SCOPE_TEST } else { SCOPE })
+            );
             reply(
                 200,
-                json!({"user_code": "ABCD-EFGH", "device_code": "dev-1", "verification_uri": "https://www.microsoft.com/link", "expires_in": 900, "interval": 1}),
+                json!({
+                    "user_code": if ely { "ABCD1234" } else { "ABCD-EFGH" },
+                    "device_code": if ely { "ely-dev-1" } else { "dev-1" },
+                    "verification_uri": if ely { "https://account.ely.by/device" } else { "https://www.microsoft.com/link" },
+                    "expires_in": 600, "interval": 1
+                }),
             )
         }
         ("POST", "/ms/token") => match form("grant_type").as_deref() {
@@ -94,12 +107,20 @@ fn route(mock: &mut Mock, method: &str, path: &str, auth: &str, body: &str) -> (
         }
         ("GET", "/mc/entitlements/mcstore") => {
             assert_eq!(auth, "Bearer mc-token");
-            let items = if mock.owns_game {
-                json!([{"name": "product_minecraft", "signature": "x"}, {"name": "game_minecraft", "signature": "x"}])
-            } else {
-                json!([])
-            };
-            reply(200, json!({"items": items, "signature": "x", "keyId": "1"}))
+            match mock.xerr {
+                Some(code) => reply(
+                    code as u16,
+                    json!({"error": "ServiceUnavailable", "message": "downtime"}),
+                ),
+                None => {
+                    let items = if mock.owns_game {
+                        json!([{"name": "product_minecraft", "signature": "x"}, {"name": "game_minecraft", "signature": "x"}])
+                    } else {
+                        json!([])
+                    };
+                    reply(200, json!({"items": items, "signature": "x", "keyId": "1"}))
+                }
+            }
         }
         ("GET", "/mc/minecraft/profile") if mock.no_profile => reply(
             404,
@@ -114,6 +135,39 @@ fn route(mock: &mut Mock, method: &str, path: &str, auth: &str, body: &str) -> (
                           {"id": "c2", "state": "ACTIVE", "url": "http://textures.minecraft.net/texture/cape2", "alias": "Vanilla"}],
             }),
         ),
+        ("POST", "/ely/token") => match form("grant_type").as_deref() {
+            Some("urn:ietf:params:oauth:grant-type:device_code") if mock.pending > 0 => {
+                mock.pending -= 1;
+                reply(400, json!({"error": "authorization_pending"}))
+            }
+            Some("urn:ietf:params:oauth:grant-type:device_code") if mock.ely_invalid_grant => {
+                // Ely.by answers an unknown or expired code this way (Microsoft says
+                // bad_verification_code): the message must not read as a spent refresh token.
+                reply(400, json!({"error": "invalid_grant"}))
+            }
+            Some("urn:ietf:params:oauth:grant-type:device_code") => {
+                assert_eq!(form("device_code").as_deref(), Some("ely-dev-1"));
+                reply(
+                    200,
+                    json!({"access_token": "mc-token", "token_type": "Bearer"}),
+                )
+            }
+            _ => reply(400, json!({"error": "unsupported_grant_type"})),
+        },
+        ("GET", "/ely/profile") if mock.no_profile => reply(
+            404,
+            json!({"path": "/minecraft/profile", "errorType": "NOT_FOUND", "error": "NOT_FOUND"}),
+        ),
+        ("GET", "/ely/profile") => {
+            assert_eq!(auth, "Bearer mc-token");
+            reply(
+                200,
+                json!({
+                    "id": UUID, "name": "Notch",
+                    "skins": [{"id": "s1", "state": "ACTIVE", "url": "http://textures.minecraft.net/texture/abc", "variant": "SLIM"}],
+                }),
+            )
+        }
         _ => reply(404, json!({"error": "NotFound"})),
     }
 }
@@ -245,6 +299,13 @@ fn notch() -> Account {
         skin: None,
         cape: None,
         provider: AccountProvider::Microsoft,
+    }
+}
+
+fn notch_ely() -> Account {
+    Account {
+        provider: AccountProvider::Ely,
+        ..notch()
     }
 }
 
@@ -473,8 +534,29 @@ fn refusals_have_messages() {
         .unwrap_err()
         .contains("no Minecraft profile"));
     assert_eq!(
-        oauth_error(&json!({"error": "authorization_declined"})),
+        oauth_error(
+            &json!({"error": "authorization_declined"}),
+            AccountProvider::Microsoft
+        ),
         "Sign-in was declined in the browser."
+    );
+    // An Ely.by failure is named as Ely.by's, never as Microsoft's.
+    assert_eq!(
+        oauth_error(&json!({"error": "access_denied"}), AccountProvider::Ely),
+        "Ely.by sign-in failed (access_denied)."
+    );
+    // Ely.by answers an unknown or expired device code with invalid_grant: that is not a spent
+    // refresh token, so it must not read as "your Microsoft sign-in expired".
+    assert_eq!(
+        oauth_error(&json!({"error": "invalid_grant"}), AccountProvider::Ely),
+        "Ely.by sign-in failed (invalid_grant)."
+    );
+    assert_eq!(
+        oauth_error(
+            &json!({"error": "invalid_grant"}),
+            AccountProvider::Microsoft
+        ),
+        SIGN_IN_AGAIN
     );
     // Nothing listening: a message, not a URL.
     assert_eq!(
@@ -490,6 +572,95 @@ fn cancelling_stops_the_wait() {
     assert_eq!(
         wait_for_sign_in(&ep, "test-client", &code, &|| true).unwrap_err(),
         "Sign-in cancelled."
+    );
+}
+
+#[test]
+fn the_whole_ely_chain() {
+    // Ely.by's token is a Minecraft token: the chain is device code, token, profile. The
+    // entitlements endpoint answers a Microsoft XSTS token, so it is not asked of Ely.by.
+    let (m, ep) = mock(|m| m.pending = 2);
+    let code = ely_device_code(&ep, "test-client").unwrap();
+    assert_eq!(
+        (code.user_code.as_str(), code.verification_uri.as_str()),
+        ("ABCD1234", "https://account.ely.by/device")
+    );
+    let token = ely_wait_for_sign_in(&ep, "test-client", &code, &|| false).unwrap();
+    assert_eq!(token, "mc-token");
+    let (account, secrets) = finish_ely_sign_in(&ep, token).unwrap();
+    assert_eq!(account.name, "Notch");
+    assert_eq!(account.provider, AccountProvider::Ely);
+    assert_eq!(secrets.provider, AccountProvider::Ely);
+    assert!(secrets.owns);
+    assert!(secrets.refresh_token.is_empty());
+    let paths: Vec<String> = m
+        .lock()
+        .unwrap()
+        .log
+        .iter()
+        .map(|(_, p, _)| p.clone())
+        .collect();
+    assert_eq!(
+        paths,
+        [
+            "/ely/devicecode",
+            "/ely/token",
+            "/ely/token",
+            "/ely/token",
+            "/ely/profile"
+        ]
+    );
+}
+
+#[test]
+fn an_ely_account_is_answered_by_its_profile_even_when_entitlements_fail() {
+    // The entitlements endpoint answers a Microsoft XSTS token; it 404s/401s for an Ely.by token.
+    // check() must not read that as "doesn't own": the Ely.by account's answer is its profile,
+    // and no entitlements request is made at all.
+    let (m, ep) = mock(|_| {});
+    let secrets = Secrets {
+        refresh_token: String::new(),
+        minecraft_token: "mc-token".into(),
+        minecraft_expires_at: now() + 86400,
+        xuid: None,
+        provider: AccountProvider::Ely,
+        owns: false,
+    };
+    let account = notch_ely();
+    let Check::Owns(renewed, renewed_secrets) = check(&ep, None, &account, secrets) else {
+        panic!("expected Owns")
+    };
+    assert_eq!(renewed.name, "Notch");
+    assert!(renewed_secrets.owns);
+    let paths: Vec<String> = m
+        .lock()
+        .unwrap()
+        .log
+        .iter()
+        .map(|(_, p, _)| p.clone())
+        .collect();
+    assert_eq!(paths, ["/ely/profile"]);
+}
+
+#[test]
+fn an_ely_account_without_a_profile_is_refused() {
+    // Ely.by's validity is its Minecraft profile: the entitlements endpoint can't answer for its
+    // tokens, so no ownership question is asked at sign-in. No profile, no account.
+    let (_, ep) = mock(|m| m.no_profile = true);
+    assert_eq!(
+        finish_ely_sign_in(&ep, "mc-token".into()).unwrap_err(),
+        NO_PROFILE
+    );
+}
+
+#[test]
+fn an_ely_invalid_grant_says_ely_by() {
+    // The message for an unknown or expired Ely.by code must not read as a Microsoft failure.
+    let (_, ep) = mock(|m| m.ely_invalid_grant = true);
+    let code = ely_device_code(&ep, "test-client").unwrap();
+    assert_eq!(
+        ely_wait_for_sign_in(&ep, "test-client", &code, &|| false).unwrap_err(),
+        "Ely.by sign-in failed (invalid_grant)."
     );
 }
 
@@ -585,8 +756,24 @@ fn session_files_are_private_and_complete() {
     let v: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(
         v,
-        json!({"name": "Notch", "uuid": UUID, "access_token": "mc-token", "user_type": "msa", "xuid": "25"})
+        json!({"name": "Notch", "uuid": UUID, "access_token": "mc-token", "user_type": "msa", "xuid": "25", "provider": "microsoft"})
     );
+    // An Ely.by account says so, so the game resolves its services through Ely.by.
+    let ely = Account {
+        uuid: UUID.into(),
+        name: "Notch".into(),
+        skin: Some((
+            "http://ely.by/storage/skins/abc.png".into(),
+            "classic".into(),
+        )),
+        cape: None,
+        provider: AccountProvider::Ely,
+    };
+    let ely_path = write_session_file(&dir, &ely, &secrets).unwrap();
+    let ely_v: Value = serde_json::from_str(&std::fs::read_to_string(&ely_path).unwrap()).unwrap();
+    assert_eq!(ely_v["provider"], "ely");
+    assert_eq!(ely_v["skin"], "http://ely.by/storage/skins/abc.png");
+    let _ = std::fs::remove_file(&ely_path);
     // The refresh token never leaves the keychain.
     assert!(!v.to_string().contains("\"r\""));
     #[cfg(unix)]
