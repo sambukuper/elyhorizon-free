@@ -6,6 +6,9 @@ Connection takes a full code too; or on the launcher's Play page) and join.
 There is no Horizon server in the middle and no account: the code itself says where the host is and
 holds the key that encrypts the game between them.
 
+The same screen also offers **Steam sharing** ([steam-friends.md](steam-friends.md)): the world open
+to a Steam lobby, friends joining over Steam's own P2P networking — the e4steam mod, ported.
+
 It is built on Open to LAN: the integrated server (`crates/horizon-client/src/lan`) listens on a local
 TCP port and speaks the vanilla protocol. Play with friends puts an encrypted tunnel in front of that
 port. Neither the integrated server nor the guest's client changes: the tunnel carries exactly the
