@@ -282,18 +282,26 @@ impl Drop for Session {
 /// client reaches on a loopback port, so everything after is a plain join.
 pub const FRIEND: &str = horizon_friends::ADDRESS_PREFIX;
 
+/// An address of the form `steam:<lobby id>` joins a friend's world through
+/// Steam (horizon-steam, the e4steam port): the same shape, a tunnel the
+/// client reaches on a loopback port.
+pub const STEAM: &str = "steam:";
+
 /// An address as players and logs see it: a friend's invite code stays
 /// out of it (its secret is in there).
 pub fn shown_address(address: &str) -> String {
-    match address.strip_prefix(FRIEND) {
-        Some(code) => match horizon_friends::invite::parse(code) {
+    if let Some(code) = address.strip_prefix(FRIEND) {
+        return match horizon_friends::invite::parse(code) {
             Some(horizon_friends::invite::Parsed::Short(c)) => {
                 format!("Friend's world ({}-****)", c.nameplate)
             }
             _ => "Friend's world".to_owned(),
-        },
-        None => address.to_owned(),
+        };
     }
+    if address.starts_with(STEAM) {
+        return "A friend's Steam world".to_owned();
+    }
+    address.to_owned()
 }
 
 /// The relay the player set (`friendsRelay` in horizon.txt, beside
@@ -339,6 +347,31 @@ fn join_friend(code: &str, send: &Sender<Event>) -> Result<(String, u16), String
     Ok(("127.0.0.1".to_owned(), port))
 }
 
+/// Reach the friend's world from its `steam:<lobby id>` address: join the
+/// Steam lobby, connect over Steam's P2P networking, and open the tunnel on
+/// a loopback port (horizon-steam, the e4steam port).
+fn join_steam(lobby: &str, send: &Sender<Event>) -> Result<(String, u16), String> {
+    #[cfg(feature = "steam")]
+    {
+        use horizon_steam::guest;
+        status(send, "Finding your friend's Steam world...");
+        let tunnel = guest::join(&guest::GuestConfig {
+            lobby: lobby.to_owned(),
+            protocol: PROTOCOL_VERSION,
+            game: horizon_protocol::GAME_VERSION.to_owned(),
+        })
+        .map_err(|e| e.to_string())?;
+        status(send, "Connected to your friend through Steam...");
+        let (port, _) = tunnel.serve_loopback().map_err(|e| e.to_string())?;
+        Ok(("127.0.0.1".to_owned(), port))
+    }
+    #[cfg(not(feature = "steam"))]
+    {
+        let _ = (lobby, send);
+        Err("This build doesn't have Steam sharing.".into())
+    }
+}
+
 fn status(send: &Sender<Event>, text: &str) {
     let _ = send.send(Event::Status(text.to_owned()));
 }
@@ -372,16 +405,19 @@ fn run(
     } else {
         let (host, port) = match address.strip_prefix(FRIEND) {
             Some(code) => join_friend(code, send)?,
-            None => {
-                let Some(target) = parse_address(address) else {
-                    return Ok(format!("Invalid server address: {address}"));
-                };
-                status(send, "Connecting to the server...");
-                target
-            }
+            None => match address.strip_prefix(STEAM) {
+                Some(lobby) => join_steam(lobby, send)?,
+                None => {
+                    let Some(target) = parse_address(address) else {
+                        return Ok(format!("Invalid server address: {address}"));
+                    };
+                    status(send, "Connecting to the server...");
+                    target
+                }
+            },
         };
-        let c = if address.starts_with(FRIEND) {
-            // The friends relay supplies a concrete endpoint, not a Minecraft hostname.
+        let c = if address.starts_with(FRIEND) || address.starts_with(STEAM) {
+            // The tunnel supplies a concrete endpoint, not a Minecraft hostname.
             Connection::connect(&host, port, Duration::from_secs(10))
         } else {
             Connection::connect_server(&host, port, Duration::from_secs(10))

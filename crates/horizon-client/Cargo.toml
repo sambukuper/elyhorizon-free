@@ -26,6 +26,10 @@ horizon-shaders = { path = "../horizon-shaders" }
 # Horizon's own shader packs: the format, the stages and the check (docs/shaders.md).
 horizon-shader-api = { path = "../horizon-shader-api" }
 horizon-friends = { path = "../horizon-friends" }
+# Steam sharing: e4steam's Steam P2P multiplayer, ported (docs/steam-friends.md).
+# The `steam` feature links the Steamworks SDK redistributable, so the game
+# needs steam_api beside it; off in dev builds and tests.
+horizon-steam = { path = "../horizon-steam", optional = true }
 # Horizon mods: sandboxed WebAssembly components, off unless installed and turned on (docs/mods.md).
 # Their runtime is the `mods` feature.
 horizon-mods = { path = "../horizon-mods", default-features = false, features = ["index"] }
@@ -94,6 +98,10 @@ controllers = ["dep:gilrs", "dep:horizon-dualsense", "horizon-client-input/contr
 # Runs code mods (wasmtime and cranelift: a quarter of a clean build). On in every release build
 # (release.yml); the tests and probes don't need it. Content mods load without it.
 mods = ["horizon-mods/runtime"]
+# Steam sharing (Play with Friends's Steam section, `steam:` joins, the e4steam
+# port). On in every release build next to `mods`; release packaging copies the
+# Steamworks redistributable beside the game (docs/steam-friends.md).
+steam = ["dep:horizon-steam"]
 # Records the call sites of mob random draws (`mob_ai_probe` traces).
 rng-trace = ["horizon-core/rng-trace"]
 

@@ -184,6 +184,7 @@ mod station_control;
 mod stations;
 mod stats;
 mod stats_screen;
+mod steam_friends;
 mod storage;
 mod structures;
 mod subtitle_hud;
@@ -1846,6 +1847,9 @@ struct Game<'a> {
     serving: Option<integrated::Serving>,
     /// The open world is shared behind an invite code (game/friends.rs).
     friends: Option<friends::Sharing>,
+    /// The open world is open to Steam friends (game/friends.rs, the e4steam
+    /// port over horizon-steam).
+    steam: Option<friends::SteamSharing>,
     world_options: Option<lan_screen::WorldOptions>,
     /// Chat Settings opened from RestrictionsScreen: Done returns to World Options.
     options_to_world_options: bool,
@@ -5481,6 +5485,7 @@ impl Game<'_> {
         }
         horizon_client::spans::time("tick_lan", || self.tick_lan(false));
         self.tick_friends();
+        self.tick_steam();
         horizon_client::spans::time("tick_hand", || self.tick_hand());
         horizon_client::spans::time("tick_sleep", || self.tick_sleep());
         self.announce_sleep_status();
@@ -13941,6 +13946,7 @@ impl<'a> Game<'a> {
             options_to_world_options: false,
             command_block_screen: None,
             friends: None,
+            steam: None,
             debug_keys: Default::default(),
             debug_charts: Default::default(),
             show_hitboxes: false,

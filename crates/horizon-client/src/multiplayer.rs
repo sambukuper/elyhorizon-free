@@ -1371,7 +1371,8 @@ impl Screen {
 }
 
 /// Direct Connection's address; a full invite code pasted there joins the
-/// friend (a short relay code could be a host name, so it needs Join a Friend).
+/// friend (a short relay code could be a host name, so it needs Join a Friend),
+/// and a bare Steam lobby id joins the friend's Steam world.
 fn direct_address(address: &str) -> String {
     let code: String = address.chars().filter(|c| !c.is_whitespace()).collect();
     if matches!(
@@ -1379,6 +1380,8 @@ fn direct_address(address: &str) -> String {
         Some(horizon_friends::invite::Parsed::Long(_))
     ) {
         format!("{}{code}", crate::net::FRIEND)
+    } else if !code.is_empty() && code.chars().all(|c| c.is_ascii_digit()) {
+        format!("{}{code}", crate::net::STEAM)
     } else {
         address.trim().to_owned()
     }
@@ -1422,6 +1425,14 @@ mod tests {
         assert_eq!(
             direct_address(&format!(" {invite} ")),
             format!("{}{invite}", crate::net::FRIEND)
+        );
+        assert_eq!(
+            direct_address(" 109775241234567890 "),
+            format!("{}109775241234567890", crate::net::STEAM)
+        );
+        assert_eq!(
+            direct_address("steam:109775241234567890"),
+            "steam:109775241234567890"
         );
         for host in ["localhost", "example.org:25566", "abcdefgh", "[::1]:25568"] {
             assert_eq!(direct_address(host), host);

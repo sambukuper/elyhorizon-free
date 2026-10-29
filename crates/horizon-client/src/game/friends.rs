@@ -6,7 +6,7 @@
 //! configured adds a short code and a fallback. The integrated server is the
 //! LAN one, unchanged: tunnelled guests are LAN guests that connect from the
 //! loopback address.
-use super::{Game, lan::LanSettings};
+use super::{Game, lan::LanSettings, steam_friends};
 use horizon_client::{
     Result,
     friends_screen::{self, Action, FriendsView},
@@ -28,6 +28,14 @@ pub(super) struct Sharing {
     copied: Option<Instant>,
     /// Sessions carried directly and through the relay so far.
     paths: (u32, u32),
+}
+
+/// Steam sharing (the e4steam port): the Steam share and whether it opened
+/// the world to LAN.
+pub(super) struct SteamSharing {
+    inner: steam_friends::Sharing,
+    /// Sharing opened the world to LAN, so stopping closes it again.
+    opened_lan: bool,
 }
 
 pub const HELP: &[&str] = &[
@@ -112,23 +120,131 @@ impl Game<'_> {
     }
 
     /// Stop sharing: the code ends (direct port closed, router mapping
-    /// deleted); the world closes to LAN again if sharing opened it.
+    /// deleted); the world closes to LAN again if sharing opened it and
+    /// Steam sharing isn't using it.
     pub(super) fn friends_stop(&mut self) {
         let Some(mut sharing) = self.friends.take() else {
             return;
         };
         sharing.host.stop();
-        if sharing.opened_lan {
+        if sharing.opened_lan && self.steam.is_none() {
             self.lan_close(true);
         } else {
             self.system_message(Text::literal("Stopped sharing the invite code."));
         }
     }
 
-    /// The LAN server is closing: the code goes with it.
+    /// The LAN server is closing: the code and the Steam share go with it.
     pub(super) fn friends_lan_closed(&mut self) {
         if let Some(mut sharing) = self.friends.take() {
             sharing.host.stop();
+        }
+        if let Some(mut sharing) = self.steam.take() {
+            sharing.inner.stop();
+        }
+    }
+
+    /// Open the world to Steam friends (the e4steam port): like
+    /// `friends_start`, it opens the world to LAN if it isn't, then shares
+    /// that port through a Steam lobby and Steam's P2P networking.
+    pub(super) fn steam_start(&mut self, access: steam_friends::Access) -> Result<()> {
+        if self.steam.is_some() {
+            return Ok(());
+        }
+        if self.title.is_some() || (self.remote.is_some() && self.integrated.is_none()) {
+            return Err("open a singleplayer world first".into());
+        }
+        let opened_lan = self.lan_port().is_none() && self.friends.is_none();
+        if self.lan_port().is_none() {
+            self.lan_open(LanSettings {
+                port: horizon_client::lan::available_port(),
+                guest_commands: false,
+                force_game_mode: true,
+            })?;
+        }
+        let port = self.lan_port().ok_or("the world isn't open to LAN")?;
+        match steam_friends::Sharing::start(
+            std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+            access,
+        ) {
+            Ok(inner) => {
+                self.steam = Some(SteamSharing { inner, opened_lan });
+                Ok(())
+            }
+            Err(e) => {
+                if opened_lan {
+                    self.lan_close(true);
+                }
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Stop sharing to Steam friends: the lobby closes. Sessions already
+    /// playing go on until the integrated server closes them.
+    pub(super) fn steam_stop(&mut self) {
+        let Some(mut sharing) = self.steam.take() else {
+            return;
+        };
+        sharing.inner.stop();
+        if sharing.opened_lan && self.friends.is_none() {
+            self.lan_close(true);
+        } else {
+            self.system_message(Text::literal("Stopped sharing to Steam friends."));
+        }
+    }
+
+    /// Steam's news, once a tick: guests arriving and leaving, and invites
+    /// the player accepted in the overlay.
+    pub(super) fn tick_steam(&mut self) {
+        if let Some(address) = steam_friends::Sharing::take_invite() {
+            if self.title.is_some() && self.remote.is_none() {
+                if let Err(e) = self.connect_server(&address, &self.options.player_name()) {
+                    self.system_message(Text::literal(format!(
+                        "Couldn't join your friend's Steam world: {e}"
+                    )));
+                }
+            } else {
+                self.system_message(Text::literal(format!(
+                    "A Steam invite arrived: leave to the title screen, then accept it again to join {address}."
+                )));
+            }
+        }
+        let Some(sharing) = self.steam.as_mut() else {
+            return;
+        };
+        for event in sharing.inner.tick() {
+            match event {
+                steam_friends::Event::GuestJoined => {
+                    self.system_message(Text::literal("A friend joined over Steam."))
+                }
+                steam_friends::Event::GuestLeft => {
+                    self.system_message(Text::literal("Your friend left."))
+                }
+            }
+        }
+    }
+
+    /// Copy the Steam address for a friend to paste.
+    pub(super) fn steam_copy(&mut self) {
+        let Some(address) = self.steam.as_ref().and_then(|s| s.inner.address()) else {
+            return;
+        };
+        use horizon_client::clipboard::Clipboard;
+        self.clipboard.set(&address);
+        if let Some(s) = self.steam.as_mut() {
+            s.inner.mark_copied();
+        }
+    }
+
+    /// Open the Steam overlay's invite dialog.
+    pub(super) fn steam_invite(&mut self) {
+        if let Some(s) = self.steam.as_mut()
+            && let Err(e) = s.inner.invite()
+        {
+            self.system_message(Text::literal(format!(
+                "Couldn't open the Steam invite dialog: {e}"
+            )));
         }
     }
 
@@ -200,6 +316,19 @@ impl Game<'_> {
             }
             Action::Copy => self.friends_copy(),
             Action::Stop => self.friends_stop(),
+            Action::SteamFriends => {
+                if let Err(e) = self.steam_start(steam_friends::Access::Friends) {
+                    self.system_message(Text::literal(format!("Couldn't share the world: {e}")));
+                }
+            }
+            Action::SteamInvitation => {
+                if let Err(e) = self.steam_start(steam_friends::Access::Invitation) {
+                    self.system_message(Text::literal(format!("Couldn't share the world: {e}")));
+                }
+            }
+            Action::SteamCopy => self.steam_copy(),
+            Action::SteamStop => self.steam_stop(),
+            Action::SteamInvite => self.steam_invite(),
             // The system browser, as the folder buttons open their folders.
             Action::Help => {
                 if let Some(url) = &view.help {
@@ -223,9 +352,11 @@ impl Game<'_> {
             }
             None => Vec::new(),
         };
+        let steam = self.steam_view();
         let Some(s) = &self.friends else {
             return FriendsView {
                 shown: self.remote.is_none() || self.integrated.is_some(),
+                steam,
                 ..FriendsView::default()
             };
         };
@@ -258,7 +389,27 @@ impl Game<'_> {
             copied: s
                 .copied
                 .is_some_and(|t| t.elapsed() < Duration::from_secs(2)),
+            steam,
         }
+    }
+
+    /// The Steam section of the view, when Steam sharing is offered.
+    fn steam_view(&self) -> Option<friends_screen::SteamView> {
+        (steam_friends::Sharing::available() || self.steam.is_some()).then(|| {
+            let (sharing, address, problem) = match &self.steam {
+                Some(s) => {
+                    let v = s.inner.view();
+                    (v.sharing, v.address, v.problem)
+                }
+                None => (false, None, None),
+            };
+            friends_screen::SteamView {
+                sharing,
+                address,
+                problem,
+                copied: self.steam.as_ref().is_some_and(|s| s.inner.just_copied()),
+            }
+        })
     }
 
     /// `horizon-ctl friends ...`.
@@ -293,6 +444,11 @@ impl Game<'_> {
                     "relayed": self.friends.as_ref().map_or(0, |s| s.paths.1),
                     "guests": view.guests,
                     "lan_port": self.lan_port(),
+                    "steam": view.steam.map(|s| json!({
+                        "sharing": s.sharing,
+                        "address": s.address,
+                        "problem": s.problem,
+                    })),
                 })))
             }
             _ => Err("friends host|stop|status".into()),
