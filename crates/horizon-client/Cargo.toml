@@ -30,6 +30,9 @@ horizon-friends = { path = "../horizon-friends" }
 # The `steam` feature links the Steamworks SDK redistributable, so the game
 # needs steam_api beside it; off in dev builds and tests.
 horizon-steam = { path = "../horizon-steam", optional = true }
+# e4mc publishing: the world public on e4mc's relay (docs/e4mc.md); pure
+# Rust, always linked, idle until the player publishes.
+horizon-e4mc = { path = "../horizon-e4mc" }
 # Horizon mods: sandboxed WebAssembly components, off unless installed and turned on (docs/mods.md).
 # Their runtime is the `mods` feature.
 horizon-mods = { path = "../horizon-mods", default-features = false, features = ["index"] }

@@ -24,6 +24,7 @@ To play, use [the launcher](../launcher/README.md); the project site is [playhor
 - [Horizon APIs](api/README.md): every surface other programs build on (mods, shaders, agent control, servers, the launcher, data formats), each with its guide, generated reference, stability and changelog, and the [stability and versioning policy](api/stability.md).
 - Menus: every screen is vanilla's (title, world list, create world, multiplayer, options, pause). Horizon's own settings hang off vanilla's Options the way mods add theirs: **Horizon Settings...** and **Mods...** in the last two slots of the Options grid (Horizon Settings opens Graphics, Advanced Graphics, Controller Settings, Extras and Mods, each a vanilla options list), with Horizon Graphics and Advanced Graphics also at the top of Video Settings and Controller Settings at the bottom of Controls. The title screen's and pause menu's Friends buttons open Join a Friend and Play with Friends ([play-with-friends.md](play-with-friends.md)).
 - [Play with Steam friends](steam-friends.md): the e4steam mod ported — a singleplayer world opened to a Steam lobby, friends joining over Steam's P2P networking, and the mod's per-Steam-account identity.
+- [Publish the world to anyone (e4mc)](e4mc.md): the e4mc mod ported — the world's public address through e4mc's relay, joinable from any client.
 
 ## Parity
 

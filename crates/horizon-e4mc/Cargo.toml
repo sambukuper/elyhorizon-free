@@ -1,0 +1,26 @@
+[package]
+name = "horizon-e4mc"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+description = "Open the world to anyone, anywhere: e4mc's public relay ported to Horizon (a QUIC session with the relay carries the invite domain, its streams carry the guests)"
+
+[dependencies]
+# QUIC client for the relay session (the relay itself is quinn + rustls).
+# ring as the crypto provider: the aws-lc-rs default drags a C toolchain into
+# every build machine for no gain here.
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "0.26"
+tokio = { version = "1", default-features = false, features = ["rt", "net", "time", "sync", "io-util", "macros"] }
+# The broker answer and the control channel are JSON.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.151"
+# Errors across the tokio boundary, the quinn TLS setup.
+anyhow = "1"
+# HTTPS to the relay broker (rustls underneath, already in the tree via the client).
+ureq = { version = "2", default-features = false, features = ["tls", "json"] }
+log = { version = "0.4", features = ["std"] }
+
+[lints]
+workspace = true

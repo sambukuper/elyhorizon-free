@@ -32,6 +32,24 @@ pub struct FriendsView {
     pub copied: bool,
     /// The Steam section (the e4steam port), when Steam sharing is offered.
     pub steam: Option<SteamView>,
+    /// The e4mc section: the world public on the relay's domain.
+    pub e4mc: Option<E4mcView>,
+}
+
+/// The e4mc part of the screen: the world's public domain, joinable by
+/// anyone from any client.
+#[derive(Clone, Debug, Default)]
+pub struct E4mcView {
+    /// The world is published right now.
+    pub publishing: bool,
+    /// The world's public domain.
+    pub domain: Option<String>,
+    /// Guests being carried right now.
+    pub guests: usize,
+    /// Why publishing isn't serving, when the player asked for it.
+    pub problem: Option<String>,
+    /// The domain was just copied.
+    pub copied: bool,
 }
 
 /// The Steam part of the screen: the world open to a Steam lobby, joined
@@ -63,6 +81,12 @@ pub enum Action {
     SteamStop,
     /// Open the Steam overlay's invite dialog.
     SteamInvite,
+    /// Publish the world through e4mc's public relay.
+    E4mcPublish,
+    /// Copy the public domain.
+    E4mcCopy,
+    /// End the publish.
+    E4mcStop,
     /// Open the troubleshooting page.
     Help,
     Done,
@@ -239,6 +263,66 @@ fn layout(
                 w: 150.0,
                 label: "Invitation Only",
                 action: Action::SteamInvitation,
+                active: view.shown,
+            });
+        }
+    }
+    // The e4mc section: the world's public domain, joinable by anyone.
+    if let Some(e4mc) = &view.e4mc
+        && y + 64.0 <= h - 33.0
+    {
+        y += 6.0;
+        lines.push(("Anyone (e4mc)".to_owned(), grey(), y));
+        y += 12.0;
+        if e4mc.publishing {
+            match &e4mc.domain {
+                Some(domain) => add(
+                    &mut lines,
+                    &format!(
+                        "Anyone with the address joins, even from vanilla Minecraft: {domain}"
+                    ),
+                    WHITE,
+                    &mut y,
+                ),
+                None => add(&mut lines, "Reaching the relay...", WHITE, &mut y),
+            }
+            buttons.push(Button {
+                x: cx - 154.0,
+                y,
+                w: 150.0,
+                label: if e4mc.copied {
+                    "Copied"
+                } else {
+                    "Copy Address"
+                },
+                action: Action::E4mcCopy,
+                active: e4mc.domain.is_some(),
+            });
+            buttons.push(Button {
+                x: cx + 4.0,
+                y,
+                w: 150.0,
+                label: "Stop Publishing",
+                action: Action::E4mcStop,
+                active: true,
+            });
+            y += 30.0;
+            if let Some(problem) = &e4mc.problem {
+                add(&mut lines, problem, WHITE, &mut y);
+            }
+        } else {
+            add(
+                &mut lines,
+                "Publish the world through e4mc's public relay: the address creates itself, and anyone who finds it joins, no Steam needed.",
+                WHITE,
+                &mut y,
+            );
+            buttons.push(Button {
+                x: cx - 100.0,
+                y,
+                w: 200.0,
+                label: "Publish to Anyone",
+                action: Action::E4mcPublish,
                 active: view.shown,
             });
         }

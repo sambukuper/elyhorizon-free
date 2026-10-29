@@ -6,7 +6,7 @@
 //! configured adds a short code and a fallback. The integrated server is the
 //! LAN one, unchanged: tunnelled guests are LAN guests that connect from the
 //! loopback address.
-use super::{Game, lan::LanSettings, steam_friends};
+use super::{Game, e4mc_friends, lan::LanSettings, steam_friends};
 use horizon_client::{
     Result,
     friends_screen::{self, Action, FriendsView},
@@ -35,6 +35,14 @@ pub(super) struct Sharing {
 pub(super) struct SteamSharing {
     inner: steam_friends::Sharing,
     /// Sharing opened the world to LAN, so stopping closes it again.
+    opened_lan: bool,
+}
+
+/// e4mc publishing: the world public on the relay's domain, and whether
+/// publishing opened the world to LAN.
+pub(super) struct E4mcSharing {
+    inner: e4mc_friends::Sharing,
+    /// Publishing opened the world to LAN, so stopping closes it again.
     opened_lan: bool,
 }
 
@@ -127,7 +135,7 @@ impl Game<'_> {
             return;
         };
         sharing.host.stop();
-        if sharing.opened_lan && self.steam.is_none() {
+        if sharing.opened_lan && self.steam.is_none() && self.e4mc.is_none() {
             self.lan_close(true);
         } else {
             self.system_message(Text::literal("Stopped sharing the invite code."));
@@ -142,6 +150,9 @@ impl Game<'_> {
         if let Some(mut sharing) = self.steam.take() {
             sharing.inner.stop();
         }
+        if let Some(mut sharing) = self.e4mc.take() {
+            sharing.inner.stop();
+        }
     }
 
     /// Open the world to Steam friends (the e4steam port): like
@@ -154,7 +165,7 @@ impl Game<'_> {
         if self.title.is_some() || (self.remote.is_some() && self.integrated.is_none()) {
             return Err("open a singleplayer world first".into());
         }
-        let opened_lan = self.lan_port().is_none() && self.friends.is_none();
+        let opened_lan = self.lan_port().is_none() && self.friends.is_none() && self.e4mc.is_none();
         if self.lan_port().is_none() {
             self.lan_open(LanSettings {
                 port: horizon_client::lan::available_port(),
@@ -187,7 +198,7 @@ impl Game<'_> {
             return;
         };
         sharing.inner.stop();
-        if sharing.opened_lan && self.friends.is_none() {
+        if sharing.opened_lan && self.friends.is_none() && self.e4mc.is_none() {
             self.lan_close(true);
         } else {
             self.system_message(Text::literal("Stopped sharing to Steam friends."));
@@ -329,6 +340,13 @@ impl Game<'_> {
             Action::SteamCopy => self.steam_copy(),
             Action::SteamStop => self.steam_stop(),
             Action::SteamInvite => self.steam_invite(),
+            Action::E4mcPublish => {
+                if let Err(e) = self.e4mc_start() {
+                    self.system_message(Text::literal(format!("Couldn't publish the world: {e}")));
+                }
+            }
+            Action::E4mcCopy => self.e4mc_copy(),
+            Action::E4mcStop => self.e4mc_stop(),
             // The system browser, as the folder buttons open their folders.
             Action::Help => {
                 if let Some(url) = &view.help {
@@ -390,6 +408,110 @@ impl Game<'_> {
                 .copied
                 .is_some_and(|t| t.elapsed() < Duration::from_secs(2)),
             steam,
+            e4mc: Some(self.e4mc_view()),
+        }
+    }
+
+    /// Publish the world through e4mc's public relay (the e4mc port): like
+    /// "friends_start", it opens the world to LAN if it isn't, then puts
+    /// the world's domain on the relay. Anyone with the domain joins; the
+    /// screen says so before the button does anything.
+    pub(super) fn e4mc_start(&mut self) -> Result<()> {
+        if self.e4mc.is_some() {
+            return Ok(());
+        }
+        if self.title.is_some() || (self.remote.is_some() && self.integrated.is_none()) {
+            return Err("open a singleplayer world first".into());
+        }
+        let opened_lan =
+            self.lan_port().is_none() && self.friends.is_none() && self.steam.is_none();
+        if self.lan_port().is_none() {
+            self.lan_open(LanSettings {
+                port: horizon_client::lan::available_port(),
+                guest_commands: false,
+                force_game_mode: true,
+            })?;
+        }
+        let port = self.lan_port().ok_or("the world isn't open to LAN")?;
+        match e4mc_friends::Sharing::start(std::net::SocketAddr::from(([127, 0, 0, 1], port))) {
+            Ok(inner) => {
+                self.e4mc = Some(E4mcSharing { inner, opened_lan });
+                Ok(())
+            }
+            Err(e) => {
+                if opened_lan {
+                    self.lan_close(true);
+                }
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Stop publishing: the domain stops answering, guests are dropped.
+    pub(super) fn e4mc_stop(&mut self) {
+        let Some(mut sharing) = self.e4mc.take() else {
+            return;
+        };
+        sharing.inner.stop();
+        if sharing.opened_lan && self.friends.is_none() && self.steam.is_none() {
+            self.lan_close(true);
+        } else {
+            self.system_message(Text::literal("Stopped publishing the world."));
+        }
+    }
+
+    /// e4mc's news, once a tick: the domain, relay notes, guests.
+    pub(super) fn tick_e4mc(&mut self) {
+        let Some(sharing) = self.e4mc.as_mut() else {
+            return;
+        };
+        for event in sharing.inner.tick() {
+            match event {
+                e4mc_friends::Event::Published(domain) => {
+                    self.system_message(Text::literal(format!(
+                        "Your world is now public: {domain} (anyone with the address can join)."
+                    )));
+                }
+                e4mc_friends::Event::Broadcast(message) => {
+                    self.system_message(Text::literal(message));
+                }
+                e4mc_friends::Event::GuestJoined => {
+                    self.system_message(Text::literal("A guest joined through e4mc."))
+                }
+                e4mc_friends::Event::GuestLeft => {
+                    self.system_message(Text::literal("The e4mc guest left."))
+                }
+            }
+        }
+    }
+
+    /// Copy the public domain for a friend to paste.
+    pub(super) fn e4mc_copy(&mut self) {
+        let Some(address) = self.e4mc.as_ref().and_then(|s| s.inner.address()) else {
+            return;
+        };
+        use horizon_client::clipboard::Clipboard;
+        self.clipboard.set(&address);
+        if let Some(s) = self.e4mc.as_mut() {
+            s.inner.mark_copied();
+        }
+    }
+
+    /// What the e4mc section of the view shows.
+    fn e4mc_view(&self) -> friends_screen::E4mcView {
+        let (domain, guests, problem) = match &self.e4mc {
+            Some(s) => {
+                let v = s.inner.view();
+                (v.domain, v.guests, v.problem)
+            }
+            None => (None, 0, None),
+        };
+        friends_screen::E4mcView {
+            publishing: self.e4mc.is_some(),
+            domain,
+            guests,
+            problem,
+            copied: self.e4mc.as_ref().is_some_and(|s| s.inner.just_copied()),
         }
     }
 

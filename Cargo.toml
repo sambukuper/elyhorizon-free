@@ -23,6 +23,7 @@ members = [
     "crates/horizon-friends",
     "crates/horizon-relay",
     "crates/horizon-steam",
+    "crates/horizon-e4mc",
     "crates/horizon-mod-sdk",
     "crates/horizon-mods",
     "crates/horizon-mods/tests/guest",
