@@ -1,0 +1,10 @@
+# Client IDs for sign-in. Mirrors the upstream Launcher's CMakeLists.txt: the IDs are baked into
+# the build configuration rather than supplied only at run time, so the "Sign in" buttons work out
+# of the box. They are public (client IDs ship in every binary), not secrets.
+#
+# Layering: a run-time environment variable wins over this value, so a release build can override
+# it from the GitHub repository variables (HORIZON_MSA_CLIENT_ID / HORIZON_ELY_CLIENT_ID) without
+# touching this file. Empty or unset means not configured.
+[env]
+HORIZON_MSA_CLIENT_ID = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb"
+HORIZON_ELY_CLIENT_ID = "elyprism-launcher"

@@ -34,12 +34,17 @@ no Microsoft sign-in"); release builds have it.
    days to weeks; sign-in fails at the Minecraft step with "This app is not approved by Mojang yet"
    until then.
 3. **Where the ID goes**:
-   - Release builds: the GitHub repository variable (not a secret: client IDs are public)
-     `HORIZON_MSA_CLIENT_ID`; the launcher's build reads it with `option_env!` at compile time.
+   - Every build: `launcher/.cargo/config.toml` holds the ID, so a plain `cargo build` bakes it in
+     and the "Sign in" button works out of the box — the same way the upstream C++ Launcher keeps
+     its IDs in its `CMakeLists.txt`. The build reads it with `option_env!` at compile time.
+   - Release builds in CI: the GitHub repository variable (not a secret: client IDs are public)
+     `HORIZON_MSA_CLIENT_ID` overrides the committed value, so a release can point at another app
+     registration without touching the file.
    - Any build, at run time: the environment variable `HORIZON_MSA_CLIENT_ID` overrides the built-in
      value (empty or unset = not configured).
 
-Never use another application's client ID (the official launcher's or another launcher's).
+The app registration is the project's own: the official launcher's or another launcher's client ID
+must never be used.
 
 ## Flow (launcher)
 

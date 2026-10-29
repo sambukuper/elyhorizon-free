@@ -105,6 +105,14 @@ Sign in with a Microsoft account in your browser (device code). Online play, and
 
 MCP: `account_sign_in`.
 
+## `elyhorizon-launcher account ely-sign-in`
+
+Sign in with an Ely.by account in your browser (device code). Online play needs one that owns Minecraft: Java Edition; offline play needs no account.
+
+    elyhorizon-launcher account ely-sign-in
+
+MCP: none: the player's switch.
+
 ## `elyhorizon-launcher account sign-out`
 
 Sign out: the account's tokens leave the keychain.

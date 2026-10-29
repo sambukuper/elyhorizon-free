@@ -12,8 +12,20 @@
 //! never stops the game from starting. The game binary itself, its harnesses and the servers go
 //! through no check at all.
 //!
-//! The Azure app (client ID) is ElyHorizon's own and is configuration: `HORIZON_MSA_CLIENT_ID` at
-//! build time, or at run time to override it. Without one, sign-in says it is not configured.
+//! The client IDs (Azure app for Microsoft, OAuth app for Ely.by) are ElyHorizon's own and are
+//! configuration. Three-layer mechanism mirrors the upstream C++ Launcher's `CMakeLists.txt`:
+//!
+//! 1. **Build-time default** (committed): `launcher/.cargo/config.toml` holds `HORIZON_MSA_CLIENT_ID`
+//!    and `HORIZON_ELY_CLIENT_ID`; a plain `cargo build` bakes them in and the "Sign in" buttons
+//!    work out of the box.
+//! 2. **Release builds in CI**: GitHub repository variables (`HORIZON_MSA_CLIENT_ID`,
+//!    `HORIZON_ELY_CLIENT_ID`) override the committed value, so a release can point at another
+//!    registration without touching the file.
+//! 3. **Run-time override**: environment variables `HORIZON_MSA_CLIENT_ID` / `HORIZON_ELY_CLIENT_ID`
+//!    override the built-in value (empty or unset = not configured).
+//!
+//! The app registration is the project's own: the official launcher's or another launcher's client
+//! ID must never be used.
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -22,14 +34,24 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The keychain service name every secret is stored under.
 pub const SERVICE: &str = "dev.elyhorizon.launcher";
-const SCOPE: &str = "XboxLive.signin offline_access";
+/// Scopes for Microsoft (Xbox Live) authentication.
+const MSA_SCOPE: &str = "XboxLive.signin offline_access";
+/// Scopes for Ely.by authentication.
+const ELY_SCOPE: &str = "account_info offline_access minecraft_server_session";
 pub const NOT_CONFIGURED: &str =
     "This build of the launcher has no Microsoft sign-in (HORIZON_MSA_CLIENT_ID), so it can't sign \
      in: the game plays offline.";
 /// What online play, and the launcher's own download of Minecraft, need: an account that owns
 /// Minecraft: Java Edition. Offline play needs no account.
-pub const NEEDS_OWNER: &str =
-    "Online play needs a Microsoft account that owns Minecraft: Java Edition";
+pub const NEEDS_OWNER: &str = "Online play needs an account that owns Minecraft: Java Edition";
+/// Ely.by not configured message.
+pub const ELY_NOT_CONFIGURED: &str =
+    "This build of the launcher has no Ely.by sign-in (HORIZON_ELY_CLIENT_ID), so it can't sign \
+     in with Ely.by: the game plays offline.";
+/// No sign-in at all is configured: neither Microsoft nor Ely.by.
+pub const NOT_CONFIGURED_ANY: &str =
+    "This build of the launcher has no account sign-in (HORIZON_MSA_CLIENT_ID, \
+     HORIZON_ELY_CLIENT_ID), so it can't sign in: the game plays offline.";
 /// Why a selected account starts the game without its session: no account here owns the game, so
 /// the run is offline.
 const NO_OWNER_PLAYS_OFFLINE: &str = "No signed-in account owns Minecraft: Java Edition";
@@ -52,6 +74,15 @@ pub fn client_id() -> Option<String> {
         .filter(|id| !id.is_empty())
 }
 
+/// The configured Ely.by client ID, if any.
+pub fn ely_client_id() -> Option<String> {
+    std::env::var("HORIZON_ELY_CLIENT_ID")
+        .ok()
+        .or_else(|| option_env!("HORIZON_ELY_CLIENT_ID").map(str::to_owned))
+        .map(|id| id.trim().to_owned())
+        .filter(|id| !id.is_empty())
+}
+
 /// Where the requests go: the real services, or a mock in tests.
 #[derive(Clone, Debug)]
 pub struct Endpoints {
@@ -61,6 +92,10 @@ pub struct Endpoints {
     pub xsts: String,
     /// api.minecraftservices.com.
     pub minecraft: String,
+    /// Ely.by OAuth 2.0 endpoints.
+    pub ely_device_code: String,
+    pub ely_token: String,
+    pub ely_profile: String,
 }
 
 impl Endpoints {
@@ -76,6 +111,9 @@ impl Endpoints {
             xbox_user: "https://user.auth.xboxlive.com/user/authenticate".into(),
             xsts: "https://xsts.auth.xboxlive.com/xsts/authorize".into(),
             minecraft: "https://api.minecraftservices.com".into(),
+            ely_device_code: "https://account.ely.by/api/oauth2/v1/devicecode".into(),
+            ely_token: "https://account.ely.by/api/oauth2/v1/token".into(),
+            ely_profile: "https://account.ely.by/api/mojang/services/minecraft/profile".into(),
         }
     }
 }
@@ -174,7 +212,7 @@ pub enum Poll {
 pub fn device_code(ep: &Endpoints, client_id: &str) -> Result<DeviceCode, String> {
     let (status, v) = send(
         request_to("POST", &format!("{}/devicecode", ep.microsoft)),
-        Some(Body::Form(vec![("client_id", client_id), ("scope", SCOPE)])),
+        Some(Body::Form(vec![("client_id", client_id), ("scope", MSA_SCOPE)])),
         "Microsoft",
     )?;
     match (
@@ -278,7 +316,7 @@ fn refresh_ms(ep: &Endpoints, client_id: &str, refresh: &str) -> Result<MsTokens
             ("grant_type", "refresh_token"),
             ("client_id", client_id),
             ("refresh_token", refresh),
-            ("scope", SCOPE),
+            ("scope", MSA_SCOPE),
         ])),
         "Microsoft",
     )?;
@@ -371,6 +409,132 @@ fn minecraft_login(ep: &Endpoints, ms_access: &str) -> Result<Minecraft, String>
     }
 }
 
+/// The Ely.by device code response.
+#[derive(Clone)]
+pub struct ElyDeviceCode {
+    pub user_code: String,
+    pub verification_uri: String,
+    pub interval: u64,
+    pub expires_at: u64,
+    device_code: String,
+}
+
+impl std::fmt::Debug for ElyDeviceCode {
+    // The device code can be traded for tokens once the player approves: never shown.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ElyDeviceCode")
+            .field("user_code", &self.user_code)
+            .field("verification_uri", &self.verification_uri)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Requests a device code from Ely.by.
+pub fn ely_device_code(ep: &Endpoints, client_id: &str) -> Result<ElyDeviceCode, String> {
+    let (status, v) = send(
+        request_to("POST", &format!("{}/devicecode", ep.ely_device_code)),
+        Some(Body::Form(vec![
+            ("client_id", client_id),
+            ("scope", ELY_SCOPE),
+        ])),
+        "Ely.by",
+    )?;
+    match (
+        status,
+        str_field(&v, "user_code"),
+        str_field(&v, "device_code"),
+    ) {
+        (200, Some(user_code), Some(device_code)) => Ok(ElyDeviceCode {
+            user_code,
+            verification_uri: str_field(&v, "verification_uri")
+                .unwrap_or_else(|| "https://account.ely.by/device".into()),
+            interval: v
+                .get("interval")
+                .and_then(Value::as_u64)
+                .unwrap_or(5)
+                .max(1),
+            expires_at: now() + v.get("expires_in").and_then(Value::as_u64).unwrap_or(900),
+            device_code,
+        }),
+        _ => Err(oauth_error(&v)),
+    }
+}
+
+/// One poll of the Ely.by token endpoint while the player signs in.
+pub fn ely_poll(
+    ep: &Endpoints,
+    client_id: &str,
+    code: &ElyDeviceCode,
+) -> Result<Option<String>, String> {
+    let (_status, v) = send(
+        request_to("POST", &format!("{}/token", ep.ely_token)),
+        Some(Body::Form(vec![
+            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+            ("client_id", client_id),
+            ("device_code", &code.device_code),
+        ])),
+        "Ely.by",
+    )?;
+    match v.get("error").and_then(Value::as_str) {
+        Some("authorization_pending") => Ok(None),
+        Some("slow_down") => Ok(None),
+        Some(other) => Err(format!("Ely.by sign-in failed: {other}")),
+        None => {
+            // Success - extract the access token
+            str_field(&v, "access_token")
+                .map(Some)
+                .ok_or_else(|| "Ely.by token response missing access_token".into())
+        }
+    }
+}
+
+/// Wait for the player to finish signing in with Ely.by.
+pub fn ely_wait_for_sign_in(
+    ep: &Endpoints,
+    client_id: &str,
+    code: &ElyDeviceCode,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<String, String> {
+    let interval = code.interval;
+    loop {
+        let until = std::time::Instant::now() + Duration::from_secs(interval);
+        while std::time::Instant::now() < until {
+            if cancelled() {
+                return Err("Sign-in cancelled.".into());
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        if now() > code.expires_at {
+            return Err("The sign-in code expired. Start again.".into());
+        }
+        match ely_poll(ep, client_id, code)? {
+            None => {} // Still pending or slow_down
+            Some(token) => return Ok(token),
+        }
+    }
+}
+
+/// Completes the Ely.by sign-in flow and creates the account and secrets.
+pub fn finish_ely_sign_in(ep: &Endpoints, ely_token: String) -> Result<(Account, Secrets), String> {
+    // Ely.by's token is already a Minecraft access token: the same services answer for it.
+    if !owns_game(ep, &ely_token)? {
+        return Err(DOES_NOT_OWN.into());
+    }
+    let account = profile(ep, &ely_token, AccountProvider::Ely)?.ok_or(NO_PROFILE)?;
+    Ok((
+        account,
+        Secrets {
+            // Ely.by gives no refresh token of ours: the token is used as it is.
+            refresh_token: String::new(),
+            minecraft_token: ely_token,
+            minecraft_expires_at: now() + 86400,
+            xuid: None,
+            provider: AccountProvider::Ely,
+            owns: true,
+        },
+    ))
+}
+
 fn bearer(request: ureq::Request, token: &str) -> ureq::Request {
     request.set("Authorization", &format!("Bearer {token}"))
 }
@@ -400,8 +564,31 @@ fn owns_game(ep: &Endpoints, token: &str) -> Result<bool, String> {
         }))
 }
 
+/// Account provider type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum AccountProvider {
+    Microsoft,
+    Ely,
+}
+
+impl Default for AccountProvider {
+    fn default() -> Self {
+        AccountProvider::Microsoft
+    }
+}
+
+impl AccountProvider {
+    /// The provider's name, as the launcher shows it.
+    pub fn label(self) -> &'static str {
+        match self {
+            AccountProvider::Microsoft => "Microsoft",
+            AccountProvider::Ely => "Ely.by",
+        }
+    }
+}
+
 /// A Minecraft profile, as the launcher shows and remembers it (no secrets).
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Account {
     /// The profile UUID without dashes.
     pub uuid: String,
@@ -411,15 +598,19 @@ pub struct Account {
     pub skin: Option<(String, String)>,
     #[serde(default)]
     pub cape: Option<String>,
+    /// The account provider (Microsoft or Ely.by).
+    #[serde(default)]
+    pub provider: AccountProvider,
 }
 
 /// The profile; none when the account has none (it doesn't own the game, or never made one).
-fn profile(ep: &Endpoints, token: &str) -> Result<Option<Account>, String> {
+fn profile(ep: &Endpoints, token: &str, provider: AccountProvider) -> Result<Option<Account>, String> {
+    let url = match provider {
+        AccountProvider::Microsoft => format!("{}/minecraft/profile", ep.minecraft),
+        AccountProvider::Ely => ep.ely_profile.clone(),
+    };
     let (status, v) = send(
-        bearer(
-            request_to("GET", &format!("{}/minecraft/profile", ep.minecraft)),
-            token,
-        ),
+        bearer(request_to("GET", &url), token),
         None,
         "the Minecraft services",
     )?;
@@ -450,6 +641,7 @@ fn profile(ep: &Endpoints, token: &str) -> Result<Option<Account>, String> {
             ))
         }),
         cape: active("capes").and_then(|c| str_field(&c, "url")),
+        provider,
     }))
 }
 
@@ -461,6 +653,9 @@ pub struct Secrets {
     minecraft_expires_at: u64,
     #[serde(default)]
     xuid: Option<String>,
+    /// The account provider (Microsoft or Ely.by).
+    #[serde(default)]
+    provider: AccountProvider,
     /// The last answer the Minecraft services gave: whether the account owns the game. It is
     /// kept here, beside the tokens, so that no plain file can say yes. Accounts saved before it
     /// existed passed the same check at sign-in, which refuses everyone else.
@@ -482,7 +677,7 @@ pub fn finish_sign_in(ep: &Endpoints, ms: MsTokens) -> Result<(Account, Secrets)
     if !owns_game(ep, &mc.token)? {
         return Err(DOES_NOT_OWN.into());
     }
-    let account = profile(ep, &mc.token)?.ok_or(NO_PROFILE)?;
+    let account = profile(ep, &mc.token, AccountProvider::Microsoft)?.ok_or(NO_PROFILE)?;
     Ok((account, Secrets::new(ms.refresh, mc)))
 }
 
@@ -493,6 +688,7 @@ impl Secrets {
             minecraft_token: mc.token,
             minecraft_expires_at: mc.expires_at,
             xuid: mc.xuid,
+            provider: AccountProvider::Microsoft,
             owns: true,
         }
     }
@@ -512,7 +708,11 @@ enum Check {
 /// first when it has less than an hour left. The secrets come back renewed whatever the answer.
 fn check(ep: &Endpoints, client_id: Option<&str>, account: &Account, secrets: Secrets) -> Check {
     let mut secrets = secrets;
-    if secrets.minecraft_expires_at <= now() + RENEW_BEFORE {
+    // Ely.by's token is a Minecraft token already and has no refresh token of ours: it is used as
+    // it is, and only Microsoft's goes through the refresh token.
+    if secrets.provider == AccountProvider::Microsoft
+        && secrets.minecraft_expires_at <= now() + RENEW_BEFORE
+    {
         let renewed = client_id
             .ok_or_else(|| NOT_CONFIGURED.to_string())
             .and_then(|id| refresh_ms(ep, id, &secrets.refresh_token))
@@ -528,7 +728,13 @@ fn check(ep: &Endpoints, client_id: Option<&str>, account: &Account, secrets: Se
         }
     }
     let token = &secrets.minecraft_token;
-    match owns_game(ep, token).and_then(|owns| Ok(if owns { profile(ep, token)? } else { None })) {
+    match owns_game(ep, token).and_then(|owns| {
+        Ok(if owns {
+            profile(ep, token, secrets.provider)?
+        } else {
+            None
+        })
+    }) {
         Err(e) => Check::NoAnswer(e, secrets),
         Ok(None) => Check::DoesNot(Secrets {
             owns: false,
@@ -1099,23 +1305,59 @@ pub fn write_session_file(
     Ok(path)
 }
 
+/// The device code type, either Microsoft's or Ely.by's.
+#[derive(Clone, Debug)]
+pub enum DeviceCodeVariant {
+    Microsoft(DeviceCode),
+    Ely(ElyDeviceCode),
+}
+
+impl DeviceCodeVariant {
+    pub fn user_code(&self) -> &str {
+        match self {
+            Self::Microsoft(d) => &d.user_code,
+            Self::Ely(d) => &d.user_code,
+        }
+    }
+
+    pub fn verification_uri(&self) -> &str {
+        match self {
+            Self::Microsoft(d) => &d.verification_uri,
+            Self::Ely(d) => &d.verification_uri,
+        }
+    }
+}
+
 /// Where a background sign-in is (the window and the MCP server show it).
 #[derive(Clone, Debug)]
 pub enum SignInState {
     Starting,
     /// Waiting for the player at `verification_uri` with `user_code`.
-    Code(DeviceCode),
+    Code(DeviceCodeVariant),
     Done(Result<Account, String>),
 }
 
 /// A sign-in on its own thread, from the code to the saved account.
+/// A sign-in on its own thread, from the code to the saved account.
 pub struct SignIn {
     state: std::sync::Arc<Mutex<SignInState>>,
     cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// The account provider (Microsoft or Ely.by).
+    provider: AccountProvider,
 }
 
 impl SignIn {
+    /// Starts a Microsoft account sign-in.
     pub fn start() -> Self {
+        Self::start_with_provider(AccountProvider::Microsoft)
+    }
+
+    /// Starts an Ely.by account sign-in.
+    pub fn start_ely() -> Self {
+        Self::start_with_provider(AccountProvider::Ely)
+    }
+
+    pub fn start_with_provider(provider: AccountProvider) -> Self {
         use std::sync::atomic::Ordering;
         let state = std::sync::Arc::new(Mutex::new(SignInState::Starting));
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -1124,24 +1366,45 @@ impl SignIn {
             let set = |s| *thread_state.lock().unwrap() = s;
             let result = (|| {
                 let ep = Endpoints::live();
-                let client_id = client_id().ok_or(NOT_CONFIGURED)?;
-                let code = device_code(&ep, &client_id)?;
-                set(SignInState::Code(code.clone()));
-                let ms = wait_for_sign_in(&ep, &client_id, &code, &|| {
-                    thread_cancel.load(Ordering::Relaxed)
-                })?;
-                let (account, secrets) = finish_sign_in(&ep, ms)?;
-                let mut accounts = Accounts::load();
-                accounts.add(store(), account.clone(), &secrets)?;
-                accounts.save()?;
-                Ok(account)
+                match provider {
+                    AccountProvider::Microsoft => {
+                        let client_id = client_id().ok_or(NOT_CONFIGURED)?;
+                        let code = device_code(&ep, &client_id)?;
+                        set(SignInState::Code(DeviceCodeVariant::Microsoft(code.clone())));
+                        let ms = wait_for_sign_in(&ep, &client_id, &code, &|| {
+                            thread_cancel.load(Ordering::Relaxed)
+                        })?;
+                        let (account, secrets) = finish_sign_in(&ep, ms)?;
+                        let mut accounts = Accounts::load();
+                        accounts.add(store(), account.clone(), &secrets)?;
+                        accounts.save()?;
+                        Ok(account)
+                    }
+                    AccountProvider::Ely => {
+                        let client_id = ely_client_id().ok_or(ELY_NOT_CONFIGURED)?;
+                        let code = ely_device_code(&ep, &client_id)?;
+                        set(SignInState::Code(DeviceCodeVariant::Ely(code.clone())));
+                        let token = ely_wait_for_sign_in(&ep, &client_id, &code, &|| {
+                            thread_cancel.load(Ordering::Relaxed)
+                        })?;
+                        let (account, secrets) = finish_ely_sign_in(&ep, token)?;
+                        let mut accounts = Accounts::load();
+                        accounts.add(store(), account.clone(), &secrets)?;
+                        accounts.save()?;
+                        Ok(account)
+                    }
+                }
             })();
             set(SignInState::Done(result));
         });
-        Self { state, cancel }
+        Self { state, cancel, provider }
     }
     pub fn state(&self) -> SignInState {
         self.state.lock().unwrap().clone()
+    }
+    /// The account provider this sign-in is for (Microsoft or Ely.by).
+    pub fn provider(&self) -> AccountProvider {
+        self.provider
     }
     pub fn cancel(&self) {
         self.cancel

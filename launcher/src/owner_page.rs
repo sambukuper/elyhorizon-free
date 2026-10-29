@@ -12,9 +12,9 @@ impl Launcher {
     }
 
     /// Opens the screen and starts the sign-in on it.
-    pub(crate) fn sign_in_to_play(&mut self) {
+    pub(crate) fn sign_in_to_play(&mut self, provider: account::AccountProvider) {
         self.owner_screen_open = true;
-        self.start_sign_in();
+        self.start_sign_in(provider);
     }
 
     /// Closes it; it comes back with the next Sign in.
@@ -28,13 +28,15 @@ impl Launcher {
 
     pub(crate) fn owner_screen(&mut self, cx: &mut Context<Self>) -> Stateful<Div> {
         let t = self.theme;
-        let configured = account::client_id().is_some();
+        let microsoft = account::client_id().is_some();
+        let ely = account::ely_client_id().is_some();
+        let configured = microsoft || ely;
         let mut body = div()
             .flex()
             .flex_col()
             .gap(px(12.))
             .p(px(28.))
-            .child(caps(tr("Microsoft account")).text_color(t.muted))
+            .child(caps(tr("Account")).text_color(t.muted))
             .child(
                 text(theme::HEADING)
                     .text_color(t.ink)
@@ -48,8 +50,13 @@ impl Launcher {
                 "Your worlds, offline names and settings stay where they are.",
             )));
         let status = match &self.sign_in_state {
-            _ if !configured => Some(div().child(tr(account::NOT_CONFIGURED))),
-            Some(SignInState::Starting) => Some(div().child(tr("Asking Microsoft…"))),
+            Some(SignInState::Starting) => {
+                let who = match self.sign_in.as_ref().map(|s| s.provider()) {
+                    Some(account::AccountProvider::Ely) => tr("Asking Ely.by…"),
+                    _ => tr("Asking Microsoft…"),
+                };
+                Some(div().child(who))
+            }
             Some(SignInState::Code(code)) => Some(
                 div()
                     .flex()
@@ -57,17 +64,19 @@ impl Launcher {
                     .gap(px(6.))
                     .child(trf(
                         "Open {link} in your browser and enter this code:",
-                        &[("link", &code.verification_uri)],
+                        &[("link", code.verification_uri())],
                     ))
                     .child(
                         text(theme::HEADING)
                             .font_family(theme::MONO)
                             .text_color(t.ink)
-                            .child(code.user_code.clone()),
+                            .child(code.user_code().to_string()),
                     ),
             ),
             Some(SignInState::Done(Err(e))) => Some(div().text_color(t.danger).child(e.clone())),
-            Some(SignInState::Done(Ok(_))) | None => None,
+            Some(SignInState::Done(Ok(_))) => None,
+            None if !configured => Some(div().child(tr(account::NOT_CONFIGURED_ANY))),
+            None => None,
         };
         body = body.children(status.map(|s| {
             plate(&t)
@@ -92,7 +101,7 @@ impl Launcher {
             );
         answers = match &self.sign_in_state {
             Some(SignInState::Code(code)) => {
-                let (uri, user_code) = (code.verification_uri.clone(), code.user_code.clone());
+                let (uri, user_code) = (code.verification_uri().to_string(), code.user_code().to_string());
                 answers
                     .child(
                         button("owner-copy", "Copy code", Kind::Secondary, &t).on_click(
@@ -110,15 +119,32 @@ impl Launcher {
                     )
             }
             Some(SignInState::Starting) => answers,
-            _ if !configured => answers,
-            _ => answers.child(
-                button("owner-sign-in", "Sign in", Kind::Primary, &t).on_click(cx.listener(
-                    |this, _: &ClickEvent, _, cx| {
-                        this.sign_in_to_play();
-                        cx.notify();
-                    },
-                )),
-            ),
+            _ if !configured && account::ely_client_id().is_none() => answers,
+            _ => {
+                let mut answers = answers;
+                if account::client_id().is_some() {
+                    answers = answers.child(
+                        button("owner-sign-in", "Sign in", Kind::Primary, &t).on_click(cx.listener(
+                            |this, _: &ClickEvent, _, cx| {
+                                this.sign_in_to_play(account::AccountProvider::Microsoft);
+                                cx.notify();
+                            },
+                        )),
+                    );
+                }
+                if account::ely_client_id().is_some() {
+                    answers = answers.child(
+                        button("owner-sign-in-ely", "Sign in with Ely.by", Kind::Secondary, &t)
+                            .on_click(cx.listener(
+                                |this, _: &ClickEvent, _, cx| {
+                                    this.sign_in_to_play(account::AccountProvider::Ely);
+                                    cx.notify();
+                                },
+                            )),
+                    );
+                }
+                answers
+            }
         };
         let card = plate(&t)
             .flex()

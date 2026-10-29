@@ -1089,9 +1089,10 @@ impl Launcher {
         });
     }
 
-    /// Starts the Microsoft sign-in; Settings and the owner gate's screen show its code.
-    fn start_sign_in(&mut self) {
-        if let Some(old) = self.sign_in.replace(SignIn::start()) {
+    /// Starts a sign-in (Microsoft or Ely.by); Settings and the owner gate's screen show its
+    /// code.
+    fn start_sign_in(&mut self, provider: account::AccountProvider) {
+        if let Some(old) = self.sign_in.replace(SignIn::start_with_provider(provider)) {
             old.cancel();
         }
         self.sign_in_state = Some(SignInState::Starting);
@@ -2346,7 +2347,7 @@ impl Launcher {
                 .child(
                     button("prepare-sign-in", "Sign in", Kind::Ghost, &t).on_click(cx.listener(
                         |this, _: &ClickEvent, _, cx| {
-                            this.sign_in_to_play();
+                            this.sign_in_to_play(account::AccountProvider::Microsoft);
                             cx.notify();
                         },
                     )),
@@ -2412,7 +2413,7 @@ impl Launcher {
                     Some(
                         button("gate-sign-in", "Sign in", Kind::Primary, &t)
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.sign_in_to_play();
+                                this.sign_in_to_play(account::AccountProvider::Microsoft);
                                 cx.notify();
                             }))
                             .into_any_element(),
@@ -2559,7 +2560,7 @@ impl Launcher {
                         )
                         .on_click(cx.listener(
                             |this, _: &ClickEvent, _, cx| {
-                                this.sign_in_to_play();
+                                this.sign_in_to_play(account::AccountProvider::Microsoft);
                                 cx.notify();
                             },
                         )),
@@ -3339,44 +3340,56 @@ impl Launcher {
                 a.name.clone(),
                 Some(
                     div()
-                        .child(tr(if plays {
-                            "Microsoft account · plays"
-                        } else {
-                            "Microsoft account · signed in"
-                        }))
+                        .child(trf(
+                            if plays {
+                                "{provider} · plays"
+                            } else {
+                                "{provider} · signed in"
+                            },
+                            &[("provider", a.provider.label())],
+                        ))
                         .into_any_element(),
                 ),
                 Some(actions.into_any_element()),
                 &t,
             ));
         }
-        let configured = account::client_id().is_some();
+        let microsoft = account::client_id().is_some();
+        let ely = account::ely_client_id().is_some();
+        let configured = microsoft || ely;
         let busy = matches!(
             self.sign_in_state,
             Some(SignInState::Starting | SignInState::Code(_))
         );
+        let asking = self.sign_in.as_ref().map(|s| s.provider());
         let detail = match &self.sign_in_state {
-            _ if !configured => div().child(tr(account::NOT_CONFIGURED)),
-            Some(SignInState::Starting) => div().child(tr("Asking Microsoft…")),
+            Some(SignInState::Starting) => {
+                let who = match asking {
+                    Some(account::AccountProvider::Ely) => tr("Asking Ely.by…"),
+                    _ => tr("Asking Microsoft…"),
+                };
+                div().child(who)
+            }
             Some(SignInState::Code(code)) => div()
                 .flex()
                 .flex_col()
                 .gap(px(6.))
                 .child(trf(
                     "Open {link} in your browser and enter this code:",
-                    &[("link", &code.verification_uri)],
+                    &[("link", code.verification_uri())],
                 ))
                 .child(
                     text(theme::HEADING)
                         .font_family(theme::MONO)
                         .text_color(t.ink)
-                        .child(code.user_code.clone()),
+                        .child(code.user_code().to_string()),
                 ),
             Some(SignInState::Done(Ok(a))) => div().child(format!("Signed in as {}.", a.name)),
             Some(SignInState::Done(Err(e))) => div().text_color(t.danger).child(e.clone()),
+            None if !configured => div().child(tr(account::NOT_CONFIGURED_ANY)),
             None if self.accounts.accounts.is_empty() => div().child(tr(
-                "ElyHorizon plays offline with no account at all. A Microsoft account adds online \
-                 servers, your own name and skin, and ElyHorizon's own download of Minecraft.",
+                "ElyHorizon plays offline with no account at all. An account adds online servers, \
+                 your own name and skin, and ElyHorizon's own download of Minecraft.",
             )),
             None => div().child(tr("Add another account.")),
         };
@@ -3393,7 +3406,7 @@ impl Launcher {
         let action = if !configured {
             None
         } else if let Some(SignInState::Code(code)) = &self.sign_in_state {
-            let (uri, user_code) = (code.verification_uri.clone(), code.user_code.clone());
+            let (uri, user_code) = (code.verification_uri().to_string(), code.user_code().to_string());
             Some(
                 div()
                     .flex()
@@ -3428,18 +3441,32 @@ impl Launcher {
         } else if busy {
             None
         } else {
-            Some(
-                button("sign-in", "Sign in with Microsoft", Kind::Secondary, &t)
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.start_sign_in();
-                        cx.notify();
-                    }))
-                    .into_any_element(),
-            )
+            let mut row = div().flex().gap(px(4.));
+            if account::client_id().is_some() {
+                row = row.child(
+                    button("sign-in", "Sign in with Microsoft", Kind::Secondary, &t)
+                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.start_sign_in(account::AccountProvider::Microsoft);
+                            cx.notify();
+                        }))
+                        .into_any_element(),
+                );
+            }
+            if account::ely_client_id().is_some() {
+                row = row.child(
+                    button("sign-in-ely", "Sign in with Ely.by", Kind::Secondary, &t)
+                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.start_sign_in(account::AccountProvider::Ely);
+                            cx.notify();
+                        }))
+                        .into_any_element(),
+                );
+            }
+            Some(row.into_any_element())
         };
         n += 1;
         let title = if self.accounts.accounts.is_empty() {
-            "Microsoft account"
+            "Account"
         } else {
             "Another account"
         };

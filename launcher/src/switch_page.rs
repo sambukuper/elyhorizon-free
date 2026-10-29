@@ -8,12 +8,17 @@ impl Launcher {
     /// The chip's two lines: the name that plays, and how.
     pub(super) fn who_plays(&self) -> (String, &'static str) {
         match self.accounts.player() {
-            Player::Microsoft(_) => (
-                self.accounts
-                    .selected()
-                    .map_or_else(String::new, |a| a.name.clone()),
-                tr("Microsoft account"),
-            ),
+            Player::Microsoft(_) => {
+                let selected = self.accounts.selected();
+                let name = selected.map_or_else(String::new, |a| a.name.clone());
+                let label = selected.map_or("Microsoft account", |a| {
+                    match a.provider {
+                        account::AccountProvider::Microsoft => tr("Microsoft account"),
+                        account::AccountProvider::Ely => tr("Ely.by account"),
+                    }
+                });
+                (name, label)
+            }
             Player::Offline(name) => (name, tr("Offline")),
             Player::GameName => (
                 self.offline_name.clone().unwrap_or_else(|| "Player".into()),
@@ -42,7 +47,7 @@ impl Launcher {
                 (
                     Player::Microsoft(a.uuid.clone()),
                     a.name.clone(),
-                    tr("Microsoft"),
+                    tr(a.provider.label()),
                 )
             })
             .collect();

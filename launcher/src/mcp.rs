@@ -44,8 +44,9 @@ fn session_tools() -> Value {
         { "name": "server_log", "description": "The most recent lines of the server's console.",
           "inputSchema": { "type": "object", "properties": { "lines": { "type": "integer", "minimum": 1, "maximum": 2000, "description": "How many lines (default 50)." } } } },
         { "name": "server_stop", "description": "Stop the server started with server cleanly (it saves the world), killing it if it does not stop within 30 seconds.", "inputSchema": none },
-        { "name": "account_list", "description": "The Microsoft accounts signed in to the launcher (names and UUIDs, never tokens), which one the game plays as (none = offline), and how a sign-in started with account_sign_in is going. CLI: elyhorizon-launcher account list", "inputSchema": none },
+        { "name": "account_list", "description": "The accounts signed in to the launcher (Microsoft or Ely.by; names and UUIDs, never tokens), which one the game plays as (none = offline), and how a sign-in started with account_sign_in or account_ely_sign_in is going. CLI: elyhorizon-launcher account list", "inputSchema": none },
         { "name": "account_sign_in", "description": "Start signing in a Microsoft account: returns a link and a code the player enters in their browser. The sign-in finishes in the background; check it with account_list. Only when the player asks to sign in. CLI: elyhorizon-launcher account sign-in", "inputSchema": none },
+        { "name": "account_ely_sign_in", "description": "Start signing in an Ely.by account: returns a link and a code the player enters in their browser. The sign-in finishes in the background; check it with account_list. Only when the player asks to sign in. CLI: elyhorizon-launcher account ely-sign-in", "inputSchema": none },
     ])
 }
 
@@ -191,14 +192,15 @@ impl Session {
                 let accounts = Accounts::load();
                 let sign_in = self.sign_in.as_ref().map(|s| match s.state() {
                     SignInState::Starting => json!({ "state": "starting" }),
-                    SignInState::Code(c) => json!({ "state": "waiting for the player", "link": c.verification_uri, "code": c.user_code }),
+                    SignInState::Code(c) => json!({ "state": "waiting for the player", "link": c.verification_uri(), "code": c.user_code() }),
                     SignInState::Done(Ok(a)) => json!({ "state": "signed in", "name": a.name }),
                     SignInState::Done(Err(e)) => json!({ "state": "failed", "error": e }),
                 });
                 Ok(serde_json::to_string_pretty(&json!({
-                    "accounts": accounts.accounts.iter().map(|a| json!({ "name": a.name, "uuid": a.uuid })).collect::<Vec<_>>(),
+                    "accounts": accounts.accounts.iter().map(|a| json!({ "name": a.name, "uuid": a.uuid, "provider": a.provider.label() })).collect::<Vec<_>>(),
                     "plays_as": accounts.selected().map(|a| a.name.clone()),
                     "sign_in_configured": account::client_id().is_some(),
+                    "ely_sign_in_configured": account::ely_client_id().is_some(),
                     "keychain": account::store().persistent(),
                     // An account that owns the game is what online play and the launcher's own
                     // download need; the game plays offline without one.
@@ -226,10 +228,35 @@ impl Session {
                 match state {
                     SignInState::Code(c) => Ok(format!(
                         "Ask the player to open {} and enter the code {}. Then check accounts.",
-                        c.verification_uri, c.user_code
+                        c.verification_uri(), c.user_code()
                     )),
                     SignInState::Done(Err(e)) => Err(e),
                     _ => Err("Microsoft did not answer. Try again.".into()),
+                }
+            }
+            "account_ely_sign_in" => {
+                account::ely_client_id().ok_or(account::ELY_NOT_CONFIGURED)?;
+                if let Some(s) = self.sign_in.take() {
+                    s.cancel();
+                }
+                let sign_in = SignIn::start_ely();
+                let deadline = std::time::Instant::now() + Duration::from_secs(30);
+                let state = loop {
+                    match sign_in.state() {
+                        SignInState::Starting if std::time::Instant::now() < deadline => {
+                            std::thread::sleep(Duration::from_millis(100))
+                        }
+                        state => break state,
+                    }
+                };
+                self.sign_in = Some(sign_in);
+                match state {
+                    SignInState::Code(c) => Ok(format!(
+                        "Ask the player to open {} and enter the code {}. Then check accounts.",
+                        c.verification_uri(), c.user_code()
+                    )),
+                    SignInState::Done(Err(e)) => Err(e),
+                    _ => Err("Ely.by did not answer. Try again.".into()),
                 }
             }
             _ => match cli_tools::all().into_iter().find(|t| t.name == name) {

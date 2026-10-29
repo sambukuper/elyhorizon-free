@@ -83,6 +83,9 @@ enum AccountCmd {
     /// ElyHorizon's own download of Minecraft, need one that owns Minecraft: Java Edition; offline
     /// play needs no account
     SignIn,
+    /// Sign in with an Ely.by account in your browser (device code). Online play needs one that
+    /// owns Minecraft: Java Edition; offline play needs no account
+    ElySignIn,
     /// Sign out: the account's tokens leave the keychain
     SignOut {
         /// Its name or UUID
@@ -602,7 +605,7 @@ enum Cmd {
     Notes { tag: Option<String> },
     /// Show the Discord, sponsor and website links
     Links,
-    /// Microsoft accounts: list them (the default), sign in, sign out, or pick the one that plays
+    /// Accounts (Microsoft or Ely.by): list them (the default), sign in, sign out, or pick the one that plays
     Account {
         #[command(subcommand)]
         action: Option<AccountCmd>,
@@ -1316,19 +1319,21 @@ fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
                     "accounts": accounts.accounts.iter().map(|a| serde_json::json!({
                         "name": a.name, "uuid": a.uuid,
                         "selected": accounts.selected.as_ref() == Some(&a.uuid),
+                        "provider": a.provider.label(),
                     })).collect::<Vec<_>>(),
                     "offline": accounts.offline.iter().map(|n| serde_json::json!({
                         "name": n,
                         "selected": accounts.player() == account::Player::Offline(n.clone()),
                     })).collect::<Vec<_>>(),
                     "sign_in_configured": account::client_id().is_some(),
+                    "ely_sign_in_configured": account::ely_client_id().is_some(),
                     "owner": accounts.has_owner(account::store()),
                 }));
             } else if accounts.accounts.is_empty() && accounts.offline.is_empty() {
                 println!(
-                    "No Microsoft account signed in: the game plays offline, as the name it made \
+                    "No account signed in: the game plays offline, as the name it made \
                      up. Add a name with `elyhorizon-launcher account offline NAME`; online servers \
-                     need one that owns Minecraft: Java Edition (`account sign-in`)."
+                     need one that owns Minecraft: Java Edition (`account sign-in` or `account ely-sign-in`)."
                 );
             } else {
                 for a in &accounts.accounts {
@@ -1337,7 +1342,7 @@ fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
                     } else {
                         " "
                     };
-                    println!("{mark} {}  {}", a.name, a.uuid);
+                    println!("{mark} {}  {}  ({})", a.name, a.uuid, a.provider.label());
                 }
                 for n in &accounts.offline {
                     let on = accounts.player() == account::Player::Offline(n.clone());
@@ -1363,6 +1368,23 @@ fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
             );
             let ms = account::wait_for_sign_in(&ep, &client_id, &code, &|| false)?;
             let (signed_in, secrets) = account::finish_sign_in(&ep, ms)?;
+            accounts.add(account::store(), signed_in.clone(), &secrets)?;
+            accounts.save()?;
+            println!("Signed in as {}.", signed_in.name);
+            if !account::store().persistent() {
+                eprintln!("{}", account::NO_KEYCHAIN);
+            }
+        }
+        AccountCmd::ElySignIn => {
+            let client_id = account::ely_client_id().ok_or(account::ELY_NOT_CONFIGURED)?;
+            let ep = account::Endpoints::live();
+            let code = account::ely_device_code(&ep, &client_id)?;
+            eprintln!(
+                "To sign in, open {} in a browser and enter the code {}",
+                code.verification_uri, code.user_code
+            );
+            let token = account::ely_wait_for_sign_in(&ep, &client_id, &code, &|| false)?;
+            let (signed_in, secrets) = account::finish_ely_sign_in(&ep, token)?;
             accounts.add(account::store(), signed_in.clone(), &secrets)?;
             accounts.save()?;
             println!("Signed in as {}.", signed_in.name);

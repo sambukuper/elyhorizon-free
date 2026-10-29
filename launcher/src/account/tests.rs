@@ -6,6 +6,7 @@ use std::net::TcpListener;
 use std::sync::Arc;
 
 const UUID: &str = "069a79f444e94726a5befca90e38aaf5";
+const SCOPE: &str = "XboxLive.signin offline_access";
 
 /// What the mock answers and what it was asked.
 #[derive(Default)]
@@ -169,6 +170,9 @@ fn serve(mock: Arc<Mutex<Mock>>) -> Endpoints {
         xbox_user: format!("{base}/xbl"),
         xsts: format!("{base}/xsts"),
         minecraft: format!("{base}/mc"),
+        ely_device_code: format!("{base}/ely/devicecode"),
+        ely_token: format!("{base}/ely/token"),
+        ely_profile: format!("{base}/ely/profile"),
     }
 }
 
@@ -203,6 +207,7 @@ fn the_whole_chain() {
                 "slim".into()
             )),
             cape: Some("http://textures.minecraft.net/texture/cape2".into()),
+            provider: AccountProvider::Microsoft,
         }
     );
     assert_eq!(secrets.minecraft_token, "mc-token");
@@ -239,6 +244,7 @@ fn notch() -> Account {
         name: "Notch".into(),
         skin: None,
         cape: None,
+        provider: AccountProvider::Microsoft,
     }
 }
 
@@ -249,6 +255,7 @@ fn secrets(token: &str, owns: bool) -> Secrets {
         minecraft_token: token.into(),
         minecraft_expires_at: now() + 7200,
         xuid: None,
+        provider: AccountProvider::Microsoft,
         owns,
     }
 }
@@ -260,6 +267,9 @@ fn offline() -> Endpoints {
         xbox_user: "http://127.0.0.1:9/xbl".into(),
         xsts: "http://127.0.0.1:9/xsts".into(),
         minecraft: "http://127.0.0.1:9/mc".into(),
+        ely_device_code: "http://127.0.0.1:9/ely/devicecode".into(),
+        ely_token: "http://127.0.0.1:9/ely/token".into(),
+        ely_profile: "http://127.0.0.1:9/ely/profile".into(),
     }
 }
 
@@ -349,7 +359,7 @@ fn a_no_from_the_services_leaves_no_owner() {
     );
     assert_eq!(
         NoOwner.to_string(),
-        "Online play needs a Microsoft account that owns Minecraft: Java Edition."
+        "Online play needs an account that owns Minecraft: Java Edition."
     );
 }
 
@@ -391,6 +401,7 @@ fn any_owner_opens_the_gate_and_the_one_who_plays_brings_the_session() {
         name: "Alex".into(),
         skin: None,
         cape: None,
+        provider: AccountProvider::Microsoft,
     });
     accounts.selected = Some("other".into());
     let pass = launch(&ep, Some("test-client"), &store, &mut accounts).unwrap();
@@ -491,12 +502,14 @@ fn accounts_keep_secrets_in_the_store_only() {
         name: "Notch".into(),
         skin: None,
         cape: None,
+        provider: AccountProvider::Microsoft,
     };
     let secrets = Secrets {
         refresh_token: "r".into(),
         minecraft_token: "mc-secret".into(),
         minecraft_expires_at: 1,
         xuid: None,
+        provider: AccountProvider::Microsoft,
         owns: true,
     };
     accounts.add(&store, account.clone(), &secrets).unwrap();
@@ -558,12 +571,14 @@ fn session_files_are_private_and_complete() {
         name: "Notch".into(),
         skin: None,
         cape: None,
+        provider: AccountProvider::Microsoft,
     };
     let secrets = Secrets {
         refresh_token: "r".into(),
         minecraft_token: "mc-token".into(),
         minecraft_expires_at: 1,
         xuid: Some("25".into()),
+        provider: AccountProvider::Microsoft,
         owns: true,
     };
     let path = write_session_file(&dir, &account, &secrets).unwrap();
@@ -615,6 +630,7 @@ fn offline_names_switch_with_accounts() {
             name: "Ludo".into(),
             skin: None,
             cape: None,
+            provider: AccountProvider::Microsoft,
         }],
         selected: Some("abc".into()),
         ..Accounts::default()
