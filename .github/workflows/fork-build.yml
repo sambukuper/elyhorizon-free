@@ -1,0 +1,190 @@
+name: fork build
+# The fork's own builds: the launcher and the game for Windows and Linux, on GitHub's runners instead of a
+# workstation. A push to main builds and keeps the binaries as artifacts; a hand-started run also publishes them
+# as a release.
+# The upstream flows do not fit a fork: release.yml's game build starts on the Mac mini's runner with the
+# maintainer's pinned Minecraft jars, and launcher.yml only builds when its release train decides a release,
+# which needs merged pull requests. macOS is left out here: nothing else on the fork runs a Mac.
+#   gh workflow run fork-build --ref main -f release=true
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a release with these builds
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HORIZON_TELEMETRY_URL: "off"
+
+jobs:
+  launcher-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      # The C runtime linked in: without it the launcher asks for VCRUNTIME140.dll.
+      RUSTFLAGS: -C target-feature=+crt-static
+      HORIZON_MSA_CLIENT_ID: ${{ vars.HORIZON_MSA_CLIENT_ID }}
+      HORIZON_ELY_CLIENT_ID: ${{ vars.HORIZON_ELY_CLIENT_ID }}
+    defaults:
+      run:
+        working-directory: launcher
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: launcher
+          shared-key: fork-launcher-windows
+      - run: cargo build --release --locked
+      - name: The version the release's
+        run: target/release/elyhorizon-launcher.exe --version
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p out dist
+          cp target/release/elyhorizon-launcher.exe dist/
+          (cd dist && 7z a ../out/elyhorizon-launcher-windows-x64.zip elyhorizon-launcher.exe > /dev/null)
+          cp target/release/elyhorizon-launcher.exe ../out/elyhorizon-launcher.exe
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elyhorizon-launcher-windows-x64.zip
+          path: launcher/out/elyhorizon-launcher-windows-x64.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elyhorizon-launcher.exe
+          path: launcher/out/elyhorizon-launcher.exe
+          if-no-files-found: error
+
+  launcher-linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      HORIZON_MSA_CLIENT_ID: ${{ vars.HORIZON_MSA_CLIENT_ID }}
+      HORIZON_ELY_CLIENT_ID: ${{ vars.HORIZON_ELY_CLIENT_ID }}
+    defaults:
+      run:
+        working-directory: launcher
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: launcher
+          shared-key: fork-launcher-linux
+      # What GPUI links to.
+      - name: Linux libraries GPUI links to
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev libfontconfig-dev \
+            libvulkan-dev libasound2-dev libudev-dev
+      - run: cargo build --release --locked
+      - name: The version the release's
+        run: target/release/elyhorizon-launcher --version
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          tar czf out/elyhorizon-launcher-linux-x86_64.tar.gz -C target/release elyhorizon-launcher
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elyhorizon-launcher-linux-x86_64.tar.gz
+          path: launcher/out/elyhorizon-launcher-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  game-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      RUSTFLAGS: -C target-feature=+crt-static
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: fork-game-windows
+      - run: cargo build --release --locked -p horizon-client
+      - name: The client starts
+        shell: bash
+        run: target/release/horizon-client.exe --help | grep -q -- '--resources'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: horizon-client-windows-x64.exe
+          path: target/release/horizon-client.exe
+          if-no-files-found: error
+
+  game-linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: fork-game-linux
+      - name: Linux libraries the game links to
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev
+      # The mods feature is the e4mc build install.sh makes: public multiplayer without Steam.
+      - run: cargo build --release --locked -p horizon-client --features mods
+      - name: The client starts
+        run: target/release/horizon-client --help | grep -q -- '--resources'
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          tar czf out/horizon-client-linux-x86_64.tar.gz -C target/release horizon-client
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: horizon-client-linux-x86_64.tar.gz
+          path: out/horizon-client-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [launcher-windows, launcher-linux, game-windows, game-linux]
+    if: github.event_name == 'workflow_dispatch' && inputs.release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish fork-<date>
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="fork-$(date -u +%Y.%m.%d-%H%M)"
+          ls -l dist
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$tag" --generate-notes --latest=false dist/*
