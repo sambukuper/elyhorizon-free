@@ -3542,7 +3542,19 @@ impl Launcher {
                 cx.stop_propagation();
                 cx.notify();
             }));
-        let valid = horizon_friends::invite::parse(&self.friend_code).is_some();
+        let parsed = horizon_friends::invite::parse_detailed(&self.friend_code);
+        // Half-typed codes aren't mistakes yet; a code that looks whole but
+        // doesn't parse is, and Join stays dead unless the field says why.
+        let symbols = self
+            .friend_code
+            .chars()
+            .filter(|c| !c.is_whitespace() && *c != '-')
+            .count();
+        let refusal = match &parsed {
+            Err(error) if symbols >= 8 => Some(error.to_string()),
+            _ => None,
+        };
+        let valid = parsed.is_ok();
         let mut join = button("join-friend", "Join", Kind::Secondary, &t);
         if can_play && valid {
             join = join.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -3557,7 +3569,11 @@ impl Launcher {
             tr("Join a friend"),
             Some(
                 div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
                     .child(tr("Paste the code a friend shows when they invite you."))
+                    .children(refusal.map(|refusal| div().text_color(t.danger).child(refusal)))
                     .into_any_element(),
             ),
             Some(
