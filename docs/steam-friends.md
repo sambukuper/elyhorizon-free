@@ -55,6 +55,11 @@ names both versions, as the relay's does), connects over Steam's P2P network,
 and logs in under the name of their own Steam account. Guests over Steam are
 LAN guests to the world: 8 players at once, the same as Open to LAN.
 
+The original mod shared as soon as the world opened to LAN, and the port
+does the same: a plain **Open to LAN** starts a friends-lobby share on its
+own, and the chat says so. The Options screen's Mods page lists the port as
+built in.
+
 No router changes, no relay, no VPN: Steam carries the traffic, as it does for
 every Steam game's multiplayer. Both players need Steam running and signed in;
 the usual Steam troubleshooting (`SteamAPI_Init failed`) applies, as

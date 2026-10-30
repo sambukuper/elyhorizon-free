@@ -1053,7 +1053,19 @@ impl Game<'_> {
         }
     }
 
+    /// ShareToLanScreen's "Open to LAN": the port goes live and, like the
+    /// original e4mc and e4steam mods, the world publishes itself (the e4mc
+    /// address lands in chat, Steam friends get a join button).
     pub(super) fn lan_open(&mut self, settings: LanSettings) -> Result<()> {
+        self.lan_open_quiet(settings)?;
+        self.friends_auto_publish();
+        Ok(())
+    }
+
+    /// The LAN half of "lan_open" without the automatic publishing: the
+    /// friends screens open the LAN this way before starting their own
+    /// share, and the announcement is theirs to make.
+    pub(super) fn lan_open_quiet(&mut self, settings: LanSettings) -> Result<()> {
         let port = if let Some(server) = &self.integrated {
             // ShareToLanScreen: IntegratedServer.publishServer.
             server

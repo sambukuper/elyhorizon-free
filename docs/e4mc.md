@@ -42,6 +42,11 @@ Open a singleplayer world, pause, **Play with Friends**. The **Anyone
 copyable, and joinable as a plain server address from any client. The chat
 announces it too. **Stop Publishing** takes the world back down.
 
+The mod published the world by itself the moment it opened to LAN, and the
+port does the same: a plain **Open to LAN** also reaches the relay, and the
+green address lands in the chat on its own. The Options screen's Mods page
+lists the port as built in.
+
 The address is public by design: anyone who finds it joins. For friends-only
 play use the invite code or the Steam section instead.
 

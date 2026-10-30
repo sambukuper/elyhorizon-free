@@ -1486,45 +1486,59 @@ impl OptionsUi {
             }
             Page::Font => pairs(&[Opt::ForceUnicode, Opt::JapaneseGlyphs]),
             Page::Mods => {
+                // The built-in multiplayer ports: not .hmod files, but this
+                // screen is where a player looks for what the game can load
+                // (docs/e4mc.md, docs/steam-friends.md).
+                let mut rows = vec![
+                    Row::Header("Built in: e4mc and Steam friends"),
+                    Row::Note(
+                        "Open the world to LAN: the e4mc address lands in chat \
+                         and Steam friends get a join button."
+                            .to_owned(),
+                    ),
+                ];
                 if s.mods.installed.is_empty() {
-                    return vec![Row::Header(
-                        "No mods: put .hmod files in the horizon-mods folder",
-                    )];
+                    rows.push(Row::Header(
+                        "No .hmod mods: put .hmod files in the horizon-mods folder",
+                    ));
+                    return rows;
                 }
-                s.mods
-                    .installed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, installed)| {
-                        let mut label = Text::literal(format!("{}: ", installed.title))
-                            .append(on_off(s.mods.is_on(i)));
-                        if installed.problem.is_some() {
-                            label = label.append(" (Stopped)");
-                        } else if installed.dev {
-                            label = label.append(" (Dev)");
-                        }
-                        let dead = installed.dev || installed.id.is_empty();
-                        // A running mod with a settings page (capability
-                        // `ui`) gets its own button beside the toggle.
-                        if installed.has_settings {
-                            let toggle = button(0.0, 0.0, 150.0, label, Act::ToggleMod(i));
-                            let settings = button(
-                                0.0,
-                                0.0,
-                                150.0,
-                                Text::literal("Settings"),
-                                Act::ModSettings(i),
-                            );
-                            Row::Buttons(
-                                if dead { inactive(toggle) } else { toggle },
-                                Some(settings),
-                            )
-                        } else {
-                            let widget = button(0.0, 0.0, 310.0, label, Act::ToggleMod(i));
-                            Row::Buttons(if dead { inactive(widget) } else { widget }, None)
-                        }
-                    })
-                    .collect()
+                rows.extend(
+                    s.mods
+                        .installed
+                        .iter()
+                        .enumerate()
+                        .map(|(i, installed)| {
+                            let mut label = Text::literal(format!("{}: ", installed.title))
+                                .append(on_off(s.mods.is_on(i)));
+                            if installed.problem.is_some() {
+                                label = label.append(" (Stopped)");
+                            } else if installed.dev {
+                                label = label.append(" (Dev)");
+                            }
+                            let dead = installed.dev || installed.id.is_empty();
+                            // A running mod with a settings page (capability
+                            // `ui`) gets its own button beside the toggle.
+                            if installed.has_settings {
+                                let toggle = button(0.0, 0.0, 150.0, label, Act::ToggleMod(i));
+                                let settings = button(
+                                    0.0,
+                                    0.0,
+                                    150.0,
+                                    Text::literal("Settings"),
+                                    Act::ModSettings(i),
+                                );
+                                Row::Buttons(
+                                    if dead { inactive(toggle) } else { toggle },
+                                    Some(settings),
+                                )
+                            } else {
+                                let widget = button(0.0, 0.0, 310.0, label, Act::ToggleMod(i));
+                                Row::Buttons(if dead { inactive(widget) } else { widget }, None)
+                            }
+                        }),
+                );
+                rows
             }
             Page::ShaderPacks => {
                 if s.shader_packs.is_empty() {

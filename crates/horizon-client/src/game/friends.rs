@@ -82,7 +82,7 @@ impl Game<'_> {
         let opened_lan = self.lan_port().is_none();
         if opened_lan {
             // ShareToLanScreen's defaults, as the world options screen offers them.
-            self.lan_open(LanSettings {
+            self.lan_open_quiet(LanSettings {
                 port: horizon_client::lan::available_port(),
                 guest_commands: false,
                 force_game_mode: true,
@@ -155,6 +155,30 @@ impl Game<'_> {
         }
     }
 
+    /// The world just opened to LAN: the original mods start here, so the
+    /// ports do too. Best effort: a problem becomes a chat line; the LAN
+    /// open itself stands.
+    pub(super) fn friends_auto_publish(&mut self) {
+        if self.steam.is_none() && steam_friends::Sharing::available() {
+            match self.steam_start(steam_friends::Access::Friends) {
+                Ok(()) => self.system_message(Text::literal(
+                    "Steam: your friends can join (Play with Friends has the details).",
+                )),
+                Err(e) => {
+                    self.system_message(Text::literal(format!("Steam sharing didn't start: {e}")))
+                }
+            }
+        }
+        if self.e4mc.is_none() {
+            match self.e4mc_start() {
+                Ok(()) => self.system_message(Text::literal(
+                    "e4mc: the world is going public, its address lands here shortly.",
+                )),
+                Err(e) => self.system_message(Text::literal(format!("e4mc didn't start: {e}"))),
+            }
+        }
+    }
+
     /// Open the world to Steam friends (the e4steam port): like
     /// `friends_start`, it opens the world to LAN if it isn't, then shares
     /// that port through a Steam lobby and Steam's P2P networking.
@@ -167,7 +191,7 @@ impl Game<'_> {
         }
         let opened_lan = self.lan_port().is_none() && self.friends.is_none() && self.e4mc.is_none();
         if self.lan_port().is_none() {
-            self.lan_open(LanSettings {
+            self.lan_open_quiet(LanSettings {
                 port: horizon_client::lan::available_port(),
                 guest_commands: false,
                 force_game_mode: true,
@@ -426,7 +450,7 @@ impl Game<'_> {
         let opened_lan =
             self.lan_port().is_none() && self.friends.is_none() && self.steam.is_none();
         if self.lan_port().is_none() {
-            self.lan_open(LanSettings {
+            self.lan_open_quiet(LanSettings {
                 port: horizon_client::lan::available_port(),
                 guest_commands: false,
                 force_game_mode: true,
