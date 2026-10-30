@@ -3406,7 +3406,10 @@ impl Launcher {
         let action = if !configured {
             None
         } else if let Some(SignInState::Code(code)) = &self.sign_in_state {
-            let (uri, user_code) = (code.verification_uri().to_string(), code.user_code().to_string());
+            let (uri, user_code) = (
+                code.verification_uri().to_string(),
+                code.user_code().to_string(),
+            );
             Some(
                 div()
                     .flex()

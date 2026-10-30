@@ -11,11 +11,9 @@ impl Launcher {
             Player::Microsoft(_) => {
                 let selected = self.accounts.selected();
                 let name = selected.map_or_else(String::new, |a| a.name.clone());
-                let label = selected.map_or("Microsoft account", |a| {
-                    match a.provider {
-                        account::AccountProvider::Microsoft => tr("Microsoft account"),
-                        account::AccountProvider::Ely => tr("Ely.by account"),
-                    }
+                let label = selected.map_or("Microsoft account", |a| match a.provider {
+                    account::AccountProvider::Microsoft => tr("Microsoft account"),
+                    account::AccountProvider::Ely => tr("Ely.by account"),
                 });
                 (name, label)
             }
