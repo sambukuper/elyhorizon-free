@@ -17,6 +17,22 @@ use horizon_protocol::{
     servers::parse_address,
     text::{Language, plain, translatable},
 };
+
+/// The port e4mc's relays serve guests on. A session's address is its domain
+/// alone: the relay hands out no per-session ports, and routes by the domain
+/// in the handshake, so a port typed onto the address lands on a listener
+/// that is not the Minecraft one and the connection dies without a word.
+const E4MC_GUEST_PORT: u16 = 25565;
+
+/// The port to connect to `host` on: e4mc relay addresses always go to the
+/// relay's guest port, whatever was typed beside the domain.
+fn e4mc_guest_port(host: &str, port: u16) -> u16 {
+    if host.ends_with(".e4mc.link") {
+        E4MC_GUEST_PORT
+    } else {
+        port
+    }
+}
 use std::{
     collections::HashMap,
     sync::{
@@ -373,11 +389,14 @@ fn run(
         let (host, port) = match address.strip_prefix(FRIEND) {
             Some(code) => join_friend(code, send)?,
             None => {
-                let Some(target) = parse_address(address) else {
+                let Some((host, port)) = parse_address(address).map(|(h, p)| {
+                    let port = e4mc_guest_port(&h, p);
+                    (h, port)
+                }) else {
                     return Ok(format!("Invalid server address: {address}"));
                 };
                 status(send, "Connecting to the server...");
-                target
+                (host, port)
             }
         };
         let c = if address.starts_with(FRIEND) {
@@ -747,7 +766,9 @@ pub fn load_language(resources: &std::path::Path) -> Language {
 /// round trip time in milliseconds.
 pub fn ping(address: &str, timeout: Duration) -> Result<(serde_json::Value, u128), String> {
     use horizon_protocol::packets::status;
-    let (host, port) = parse_address(address).ok_or("Invalid address")?;
+    let (host, port) = parse_address(address)
+        .map(|(h, p)| (h.clone(), e4mc_guest_port(&h, p)))
+        .ok_or("Invalid address")?;
     let mut c = Connection::connect_server(&host, port, timeout).map_err(|e| e.to_string())?;
     c.reader
         .set_read_timeout(Some(timeout))
