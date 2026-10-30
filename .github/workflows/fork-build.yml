@@ -60,7 +60,7 @@ jobs:
           mkdir -p out dist
           cp target/release/elyhorizon-launcher.exe dist/
           (cd dist && 7z a ../out/elyhorizon-launcher-windows-x64.zip elyhorizon-launcher.exe > /dev/null)
-          cp target/release/elyhorizon-launcher.exe ../out/elyhorizon-launcher.exe
+          cp target/release/elyhorizon-launcher.exe out/elyhorizon-launcher.exe
           ls -l out
       - uses: actions/upload-artifact@v4
         with:
