@@ -798,6 +798,8 @@ impl Game<'_> {
         if !started {
             return Err(err("commands.publish.failed", &[]));
         }
+        // Like Open to LAN's screens: the ports start with the world.
+        self.friends_auto_publish();
         let port_text = port.to_string();
         let link = Text::literal(port_text.clone()).with_style(&Style {
             color: Some(text::GREEN),

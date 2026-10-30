@@ -1066,17 +1066,32 @@ impl Game<'_> {
             server.call(move |g| g.apply_world_options(&b, &w));
             if w.lan != b.lan || (w.lan && w.port != b.port) {
                 match (w.lan, self.lan_port()) {
-                    (true, Some(port)) => self.system_message(Text::translate(
-                        "menu.multiplayerOptions.publish.started.lan",
-                        &[Text::literal(port.to_string())],
-                    )),
+                    (true, Some(port)) => {
+                        if b.lan {
+                            // The port moved under the shares: restart them
+                            // on the new one.
+                            self.friends_lan_closed();
+                        }
+                        self.system_message(Text::translate(
+                            "menu.multiplayerOptions.publish.started.lan",
+                            &[Text::literal(port.to_string())],
+                        ));
+                        // The server did the publishing here, not lan_open,
+                        // so the Steam and e4mc ports start from here too.
+                        self.friends_auto_publish();
+                    }
                     (true, None) => {
                         self.system_message(Text::translate("commands.publish.failed", &[]));
                     }
-                    (false, _) => self.system_message(Text::translate(
-                        "menu.multiplayerOptions.publish.stopped",
-                        &[],
-                    )),
+                    (false, _) => {
+                        // The server unpublished by itself; the shares go
+                        // with the LAN port.
+                        self.friends_lan_closed();
+                        self.system_message(Text::translate(
+                            "menu.multiplayerOptions.publish.stopped",
+                            &[],
+                        ));
+                    }
                 }
             }
             return;
