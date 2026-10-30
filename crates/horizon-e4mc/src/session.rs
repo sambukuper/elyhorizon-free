@@ -14,7 +14,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         mpsc::Sender,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::watch};
 
@@ -28,6 +28,13 @@ const MAX_STREAMS: u32 = 512;
 /// QUIC keep-alive: the relay's own is 5 s, so ours must be shorter or the
 /// session dies during quiet periods.
 const KEEP_ALIVE: Duration = Duration::from_secs(3);
+/// The pause before the first reconnect; each failure doubles it.
+const RETRY_FIRST: Duration = Duration::from_secs(1);
+/// The longest pause between reconnects.
+const RETRY_MAX: Duration = Duration::from_secs(30);
+/// A session that lasted this long worked, so the next failure starts the
+/// backoff over instead of inheriting a long pause.
+const RETRY_RESET: Duration = Duration::from_secs(60);
 
 pub struct SessionConfig {
     /// The world's loopback port (Open to LAN's).
@@ -64,30 +71,20 @@ impl Shared {
     }
 }
 
-/// The thread body: one runtime, one session, until stopped or failed.
+/// The thread body: one runtime, one session at a time, until stopped. A
+/// session that ends is retried with a growing pause, because a dropped
+/// relay connection is what turns the domain the friend was given into a
+/// dead address: publishing again gets a fresh one.
 pub(crate) fn run(shared: Arc<Shared>) {
-    // The broker is plain HTTPS and blocking; it runs before the runtime.
-    let relay = shared.config.relay.clone().map(Ok).unwrap_or_else(|| {
-        broker_relay().map_err(|e| {
-            if !shared.stopped() {
-                shared.set_problem(format!("the relay broker didn't answer: {e}"));
-            }
-            e
-        })
-    });
-    let relay = match relay {
-        Ok(relay) => relay,
-        Err(_) => return,
-    };
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("e4mc: tokio runtime");
-    let stop = shared.stop.subscribe();
+    let mut stop = shared.stop.subscribe();
     runtime.block_on(async {
-        // The endpoint must outlive the session: dropping it kills the
+        // The endpoint outlives every session: dropping it kills the
         // connections silently, without the close frame that tells the relay
-        // to end its guests. It is released only after wait_idle.
+        // to end its guests. One socket serves all the retries.
         let endpoint = match make_endpoint() {
             Ok(endpoint) => endpoint,
             Err(error) => {
@@ -97,19 +94,74 @@ pub(crate) fn run(shared: Arc<Shared>) {
                 return;
             }
         };
-        let result = session(&shared, relay, stop.clone(), &endpoint).await;
-        if let Err(error) = result
-            && !shared.stopped()
-        {
-            shared.set_problem(error.to_string());
+        let mut backoff = RETRY_FIRST;
+        while !shared.stopped() {
+            let relay = match &shared.config.relay {
+                Some(relay) => relay.clone(),
+                None => match relay_from_broker(&mut stop).await {
+                    Ok(relay) => relay,
+                    Err(error) => {
+                        if shared.stopped() {
+                            break;
+                        }
+                        shared.set_problem(format!("the relay broker didn't answer: {error}"));
+                        if !pause(&shared, &mut stop, backoff).await {
+                            break;
+                        }
+                        backoff = (backoff * 2).min(RETRY_MAX);
+                        continue;
+                    }
+                },
+            };
+            let started = Instant::now();
+            let result = session(&shared, relay, stop.clone(), &endpoint).await;
+            // However the session ended, its domain no longer answers:
+            // leaving it on screen is what makes "can't join" look like the
+            // guest's fault.
+            shared.state.lock().unwrap().domain = None;
+            if shared.stopped() {
+                break;
+            }
+            let error = match result {
+                Ok(()) => "the relay session closed".to_string(),
+                Err(error) => error.to_string(),
+            };
+            log::info!("e4mc: dropped ({error}); retrying in {backoff:?}");
+            shared.set_problem(error);
+            if started.elapsed() >= RETRY_RESET {
+                backoff = RETRY_FIRST;
+            }
+            if !pause(&shared, &mut stop, backoff).await {
+                break;
+            }
+            backoff = (backoff * 2).min(RETRY_MAX);
         }
-        if shared.stopped() {
-            // The close frame has to reach the relay before the socket dies.
-            let _ = tokio::time::timeout(Duration::from_secs(3), endpoint.wait_idle()).await;
-        }
+        // The close frame has to reach the relay before the socket dies.
+        let _ = tokio::time::timeout(Duration::from_secs(3), endpoint.wait_idle()).await;
     });
-    log::info!("e4mc: session ended, shutting the runtime down");
+    log::info!("e4mc: publishing stopped, shutting the runtime down");
     runtime.shutdown_timeout(Duration::from_secs(2));
+}
+
+/// The broker is plain HTTPS and blocking: ask it off the runtime and keep
+/// listening for the stop signal while it answers.
+async fn relay_from_broker(stop: &mut watch::Receiver<bool>) -> Result<(String, u16), String> {
+    let mut broker = tokio::task::spawn_blocking(broker_relay);
+    tokio::select! {
+        _ = stop.changed() => Err("publishing was stopped".to_string()),
+        relay = &mut broker => relay.map_err(|e| e.to_string())?,
+    }
+}
+
+/// Waits out one backoff, returning false when the player stopped first.
+async fn pause(shared: &Arc<Shared>, stop: &mut watch::Receiver<bool>, wait: Duration) -> bool {
+    if shared.stopped() {
+        return false;
+    }
+    tokio::select! {
+        _ = stop.changed() => false,
+        _ = tokio::time::sleep(wait) => !shared.stopped(),
+    }
 }
 
 fn broker_relay() -> Result<(String, u16), String> {
@@ -199,7 +251,12 @@ async fn session(
         }
     };
     log::info!("e4mc: domain assigned: {domain}");
-    shared.state.lock().unwrap().domain = Some(domain.clone());
+    {
+        let mut state = shared.state.lock().unwrap();
+        state.domain = Some(domain.clone());
+        // Whatever went wrong before, this session is serving now.
+        state.problem = None;
+    }
     shared.emit(crate::PublishEvent::Published { domain });
 
     // Serving: the relay's broadcasts on the control channel, and one
@@ -290,5 +347,51 @@ async fn bridge(shared: Arc<Shared>, mut send: SendStream, mut recv: RecvStream)
     };
     if let Err(e) = result {
         log::info!("e4mc: a guest's bridge ended: {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{atomic::AtomicUsize, mpsc::channel};
+
+    fn shared() -> Arc<Shared> {
+        let (events, _) = channel();
+        let (stop, _) = watch::channel(false);
+        Arc::new(Shared {
+            config: SessionConfig {
+                lan: "127.0.0.1:25565".parse().unwrap(),
+                relay: None,
+            },
+            events,
+            state: Arc::new(Mutex::new(SessionState::default())),
+            guests: Arc::new(AtomicUsize::new(0)),
+            stop: Arc::new(stop),
+        })
+    }
+
+    /// Quitting must not wait out a reconnect pause: the stop signal ends
+    /// the wait at once, however long the pause was going to be.
+    #[test]
+    fn a_stop_ends_the_reconnect_pause_at_once() {
+        let shared = shared();
+        let mut stop = shared.stop.subscribe();
+        let sender = shared.stop.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            let _ = sender.send(true);
+        });
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let started = Instant::now();
+        let still_wanted = runtime.block_on(pause(&shared, &mut stop, RETRY_MAX));
+        assert!(!still_wanted);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the pause ignored the stop: {:?}",
+            started.elapsed()
+        );
     }
 }

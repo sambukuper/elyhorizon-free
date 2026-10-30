@@ -150,7 +150,7 @@ impl Publish {
         if self.inner.stopped.swap(true, Ordering::Relaxed) {
             return;
         }
-        let _ = self.inner.stop.send(true);
+        self.inner.stop.send_replace(true);
         if let Some(thread) = self.inner.thread.lock().unwrap().take() {
             let _ = thread.join();
         }
