@@ -33,7 +33,7 @@ fn session_tools() -> Value {
             "instance": { "type": "string", "description": "The instance to play, by name or id (instance_list). Default: the selected one." },
             "world": { "type": "string", "description": "Open or create this world (a folder under saves) at once." },
             "creative": { "type": "boolean", "description": "Creative mode for a new world." },
-            "join": { "type": "string", "description": "Join a friend's world with its invite code. Only when the player asks." },
+            "join": { "type": "string", "description": "Join a friend's world: their invite code, or the server address they published. Only when the player asks." },
             "server": { "type": "string", "description": "Join this server at once: an address, or a server of the instance's list (multiplayer_list) by name or position. Only when the player asks." },
             "offscreen": { "type": "boolean", "description": "Render without showing a window (game_screenshot still works)." },
             "arg": { "type": "array", "items": { "type": "string" }, "description": "Extra game arguments, passed through as-is (for example \"--server-thread\")." } } } },

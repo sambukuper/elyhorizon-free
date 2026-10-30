@@ -3543,6 +3543,7 @@ impl Launcher {
                 cx.notify();
             }));
         let parsed = horizon_friends::invite::parse_detailed(&self.friend_code);
+        let address = backend::server_address(&self.friend_code);
         // Half-typed codes aren't mistakes yet; a code that looks whole but
         // doesn't parse is, and Join stays dead unless the field says why.
         let symbols = self
@@ -3550,11 +3551,11 @@ impl Launcher {
             .chars()
             .filter(|c| !c.is_whitespace() && *c != '-')
             .count();
-        let refusal = match &parsed {
-            Err(error) if symbols >= 8 => Some(error.to_string()),
+        let refusal = match (&parsed, &address) {
+            (Err(error), None) if symbols >= 8 => Some(error.to_string()),
             _ => None,
         };
-        let valid = parsed.is_ok();
+        let valid = parsed.is_ok() || address.is_some();
         let mut join = button("join-friend", "Join", Kind::Secondary, &t);
         if can_play && valid {
             join = join.on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -3572,7 +3573,9 @@ impl Launcher {
                     .flex()
                     .flex_col()
                     .gap(px(2.))
-                    .child(tr("Paste the code a friend shows when they invite you."))
+                    .child(tr(
+                        "Paste an invite code, or a server address such as name.e4mc.link.",
+                    ))
                     .children(refusal.map(|refusal| div().text_color(t.danger).child(refusal)))
                     .into_any_element(),
             ),
@@ -3600,7 +3603,9 @@ impl Launcher {
     }
 
     fn join_friend(&mut self) {
-        if horizon_friends::invite::parse(&self.friend_code).is_none() {
+        if horizon_friends::invite::parse(&self.friend_code).is_none()
+            && backend::server_address(&self.friend_code).is_none()
+        {
             return;
         }
         self.joining = Some(self.friend_code.clone());

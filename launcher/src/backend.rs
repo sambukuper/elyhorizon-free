@@ -1997,13 +1997,71 @@ pub fn client(tag: &str) -> Result<Command, String> {
     Ok(cmd)
 }
 
-/// Start the game straight into a friend's world: `--server friend:CODE`.
-pub fn join_friend(cmd: &mut Command, code: &str) -> Result<(), String> {
-    horizon_friends::invite::parse_detailed(code).map_err(|e| e.to_string())?;
-    let code: String = code.chars().filter(|c| !c.is_whitespace()).collect();
-    cmd.arg("--server")
-        .arg(format!("{}{code}", horizon_friends::ADDRESS_PREFIX));
-    Ok(())
+/// Start the game straight into a friend's world (`--server friend:CODE`) or
+/// a server address the player typed (`--server host[:port]`, which is what
+/// e4mc publishes).
+pub fn join_friend(cmd: &mut Command, text: &str) -> Result<(), String> {
+    match horizon_friends::invite::parse_detailed(text) {
+        Ok(_) => {
+            let code: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+            cmd.arg("--server")
+                .arg(format!("{}{code}", horizon_friends::ADDRESS_PREFIX));
+            Ok(())
+        }
+        Err(error) => match server_address(text) {
+            Some(address) => {
+                cmd.arg("--server").arg(address);
+                Ok(())
+            }
+            None => Err(error.to_string()),
+        },
+    }
+}
+
+/// What a player typed as a server address, if it is one: `host`, `host:port`,
+/// or a bracketed IPv6 with an optional port. The host needs a dot, an
+/// explicit port, or to be `localhost`, so a pasted invite code is never
+/// mistaken for an address.
+pub fn server_address(text: &str) -> Option<String> {
+    let text = text.trim();
+    if text.is_empty() || text.chars().any(char::is_whitespace) || text.contains("://") {
+        return None;
+    }
+    let (host, port, bracketed) = match text.strip_prefix('[') {
+        Some(rest) => {
+            let (host, rest) = rest.split_once(']')?;
+            let port = match rest.strip_prefix(':') {
+                Some(port) => Some(port),
+                None if rest.is_empty() => None,
+                None => return None,
+            };
+            (host, port, true)
+        }
+        None => {
+            if text.matches(':').count() > 1 {
+                return None;
+            }
+            match text.split_once(':') {
+                Some((host, port)) => (host, Some(port), false),
+                None => (text, None, false),
+            }
+        }
+    };
+    let named =
+        bracketed || host.contains('.') || host.eq_ignore_ascii_case("localhost") || port.is_some();
+    let host_ok = named
+        && !host.is_empty()
+        && host.len() <= 253
+        && host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ':'))
+        && !host.starts_with('.')
+        && !host.ends_with('.');
+    let port_ok = match port {
+        Some(port) => port.parse::<u16>().is_ok_and(|port| port != 0),
+        None => true,
+    };
+    (host_ok && port_ok).then(|| text.to_owned())
 }
 
 /// The dedicated server's command in `folder`, once prepared and the EULA is agreed to.
@@ -2809,6 +2867,41 @@ mod java_tests;
 mod tests {
     use super::*;
     use std::cmp::Ordering::*;
+
+    /// An address a friend publishes is joined directly; a pasted code that
+    /// is not one stays refused, so Join never turns into a blind dial.
+    #[test]
+    fn the_join_field_takes_a_code_or_an_address() {
+        for address in [
+            "kooky-gumball.de.e4mc.link",
+            "kooky-gumball.de.e4mc.link:25565",
+            "localhost:25565",
+            "192.168.1.20:25565",
+            "[2001:db8::20]:25565",
+        ] {
+            assert_eq!(server_address(address).as_deref(), Some(address));
+        }
+        for not_an_address in [
+            "",
+            " ",
+            "http://name.e4mc.link",
+            "GC-DABE1-6QN0F-XP15C-2C003-F9A",
+            "host:0",
+            "host:port",
+            "2001:db8::20",
+            ".e4mc.link",
+        ] {
+            assert_eq!(server_address(not_an_address), None, "{not_an_address:?}");
+        }
+        let mut cmd = Command::new("horizon-client");
+        join_friend(&mut cmd, "kooky-gumball.de.e4mc.link").unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args, ["--server", "kooky-gumball.de.e4mc.link"]);
+        assert!(join_friend(&mut Command::new("horizon-client"), "GC-DABE1").is_err());
+    }
 
     /// The game program's mod API level is its mark's; a program from before the mark (0.2.68
     /// and older) or none at all serves level 0.

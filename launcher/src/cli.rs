@@ -579,7 +579,7 @@ enum Cmd {
         /// Creative mode for a new world
         #[arg(long)]
         creative: bool,
-        /// Join a friend's world with its invite code
+        /// Join a friend's world: their invite code, or the server address they published
         #[arg(long)]
         join: Option<String>,
         /// Join this server at once: an address, or a server of the list by name or position
