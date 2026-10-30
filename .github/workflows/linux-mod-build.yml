@@ -5,6 +5,8 @@ name: linux mod build
 # by hand: it is the fork's check that the modded Linux build works, not a
 # release.
 on:
+  push:
+    branches: [linux-game-mod-test]
   workflow_dispatch:
 
 permissions:
