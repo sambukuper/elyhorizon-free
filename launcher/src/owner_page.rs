@@ -101,7 +101,10 @@ impl Launcher {
             );
         answers = match &self.sign_in_state {
             Some(SignInState::Code(code)) => {
-                let (uri, user_code) = (code.verification_uri().to_string(), code.user_code().to_string());
+                let (uri, user_code) = (
+                    code.verification_uri().to_string(),
+                    code.user_code().to_string(),
+                );
                 answers
                     .child(
                         button("owner-copy", "Copy code", Kind::Secondary, &t).on_click(
@@ -124,23 +127,28 @@ impl Launcher {
                 let mut answers = answers;
                 if account::client_id().is_some() {
                     answers = answers.child(
-                        button("owner-sign-in", "Sign in", Kind::Primary, &t).on_click(cx.listener(
-                            |this, _: &ClickEvent, _, cx| {
+                        button("owner-sign-in", "Sign in", Kind::Primary, &t).on_click(
+                            cx.listener(|this, _: &ClickEvent, _, cx| {
                                 this.sign_in_to_play(account::AccountProvider::Microsoft);
                                 cx.notify();
-                            },
-                        )),
+                            }),
+                        ),
                     );
                 }
                 if account::ely_client_id().is_some() {
                     answers = answers.child(
-                        button("owner-sign-in-ely", "Sign in with Ely.by", Kind::Secondary, &t)
-                            .on_click(cx.listener(
-                                |this, _: &ClickEvent, _, cx| {
-                                    this.sign_in_to_play(account::AccountProvider::Ely);
-                                    cx.notify();
-                                },
-                            )),
+                        button(
+                            "owner-sign-in-ely",
+                            "Sign in with Ely.by",
+                            Kind::Secondary,
+                            &t,
+                        )
+                        .on_click(cx.listener(
+                            |this, _: &ClickEvent, _, cx| {
+                                this.sign_in_to_play(account::AccountProvider::Ely);
+                                cx.notify();
+                            },
+                        )),
                     );
                 }
                 answers

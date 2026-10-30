@@ -228,7 +228,8 @@ impl Session {
                 match state {
                     SignInState::Code(c) => Ok(format!(
                         "Ask the player to open {} and enter the code {}. Then check accounts.",
-                        c.verification_uri(), c.user_code()
+                        c.verification_uri(),
+                        c.user_code()
                     )),
                     SignInState::Done(Err(e)) => Err(e),
                     _ => Err("Microsoft did not answer. Try again.".into()),
@@ -253,7 +254,8 @@ impl Session {
                 match state {
                     SignInState::Code(c) => Ok(format!(
                         "Ask the player to open {} and enter the code {}. Then check accounts.",
-                        c.verification_uri(), c.user_code()
+                        c.verification_uri(),
+                        c.user_code()
                     )),
                     SignInState::Done(Err(e)) => Err(e),
                     _ => Err("Ely.by did not answer. Try again.".into()),
