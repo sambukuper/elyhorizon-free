@@ -1803,9 +1803,67 @@ pub fn append_game_args(cmd: &mut Command) {
     cmd.args(game_args());
 }
 
+/// A client build of the player's own (a modded game from a fork of the project), kept beside the
+/// versions in `<data>/game-mod` so every version, new ones included, plays it: the client binary
+/// and whatever else sits next to it (the Steam API library). Applied before launch; the version's
+/// own binary is kept once as `horizon-client.exe.upstream`. An empty or absent folder is the
+/// vanilla game again: nothing is restored, so turning the mod off means clearing the folder and
+/// putting `.upstream` back (the installer spells this out).
+fn apply_game_mod(tag: &str) {
+    let mod_dir = data_dir().join("game-mod");
+    let mod_exe = mod_dir.join(CLIENT);
+    let Ok(mod_meta) = fs::metadata(&mod_exe) else {
+        return; // No game mod kept: vanilla.
+    };
+    let dir = version_dir(tag);
+    let target = dir.join(CLIENT);
+    // The mod says which game it is built for (game-version.txt); a version of another
+    // game plays its own binary rather than a mismatched one.
+    let wanted = fs::read_to_string(mod_dir.join("game-version.txt"))
+        .map(|v| v.trim().to_owned())
+        .unwrap_or_default();
+    if !wanted.is_empty() && wanted != game_version_at(&dir) {
+        return;
+    }
+    let marker = dir.join(".game-mod");
+    let in_place = fs::metadata(&target)
+        .map(|m| m.len() == mod_meta.len() && marker.exists())
+        .unwrap_or(false);
+    if in_place {
+        return;
+    }
+    if !dir.join(format!("{CLIENT}.upstream")).exists()
+        && fs::rename(&target, dir.join(format!("{CLIENT}.upstream")).as_path()).is_err()
+    {
+        return; // Nothing to keep, or busy: rather vanilla than a broken swap.
+    }
+    if fs::copy(&mod_exe, &target).is_err() {
+        return;
+    }
+    let _ = fs::write(&marker, mod_meta.len().to_string());
+    // The mod's companions (steam_api beside the client, as the game looks for it there).
+    if let Ok(entries) = fs::read_dir(&mod_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name == CLIENT || name == "game-version.txt" {
+                continue;
+            }
+            let from = entry.path();
+            let to = dir.join(entry.file_name());
+            let same = fs::metadata(&from).ok().map(|m| m.len())
+                == fs::metadata(&to).ok().map(|m| m.len());
+            if !same && fs::copy(&from, &to).is_err() {
+                eprintln!("game-mod: copying {} failed", to.display());
+            }
+        }
+    }
+}
+
 pub fn client_command(tag: &str) -> Command {
     let home = game_home();
     let _ = fs::create_dir_all(&home);
+    apply_game_mod(tag);
     let mut cmd = Command::new(client_program(tag));
     cmd.current_dir(home).arg("--resources").arg(resources(tag));
     // PipeWire remembers volume and mute per application name. The game's own name is
