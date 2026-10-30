@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const TAG: &str = "v2026.10.27.01";
-const ORIGINAL: &str = "#!/bin/sh\necho the version's own game\n";
+const ORIGINAL: &str = "#!/bin/sh\necho the version game\n";
 const MOD: &str = "#!/bin/sh\necho the game-mod build\n";
 
 /// Fresh homes with one installed, prepared version whose game is a shell script, and a
