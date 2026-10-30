@@ -582,16 +582,11 @@ fn owns_game(ep: &Endpoints, token: &str) -> Result<Option<bool>, String> {
 }
 
 /// Account provider type.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AccountProvider {
+    #[default]
     Microsoft,
     Ely,
-}
-
-impl Default for AccountProvider {
-    fn default() -> Self {
-        AccountProvider::Microsoft
-    }
 }
 
 impl AccountProvider {
@@ -694,10 +689,9 @@ impl std::fmt::Debug for Secrets {
 /// From Microsoft tokens to a ready account: Xbox, XSTS, Minecraft, ownership, profile.
 pub fn finish_sign_in(ep: &Endpoints, ms: MsTokens) -> Result<(Account, Secrets), String> {
     let mc = minecraft_login(ep, &ms.access)?;
-    match owns_game(ep, &mc.token) {
-        Ok(Some(false)) => return Err(DOES_NOT_OWN.into()),
-        Ok(None) | Ok(Some(true)) | Err(_) => {} // can't check / services down: let the token
-                                                 // through, owns will be decided later by check()
+    // Can't check / services down: let the token through, owns will be decided later by check().
+    if let Ok(Some(false)) = owns_game(ep, &mc.token) {
+        return Err(DOES_NOT_OWN.into());
     }
     let account = profile(ep, &mc.token, AccountProvider::Microsoft)?.ok_or(NO_PROFILE)?;
     Ok((account, Secrets::new(ms.refresh, mc)))
