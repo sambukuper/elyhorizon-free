@@ -130,10 +130,16 @@ jobs:
       - name: The client starts
         shell: bash
         run: target/release/horizon-client.exe --help | grep -q -- '--resources'
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p out
+          cp target/release/horizon-client.exe out/horizon-client-windows-x64.exe
+          ls -l out
       - uses: actions/upload-artifact@v4
         with:
           name: horizon-client-windows-x64.exe
-          path: target/release/horizon-client.exe
+          path: out/horizon-client-windows-x64.exe
           if-no-files-found: error
 
   game-linux:
