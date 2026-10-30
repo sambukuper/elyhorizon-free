@@ -1486,16 +1486,12 @@ impl OptionsUi {
             }
             Page::Font => pairs(&[Opt::ForceUnicode, Opt::JapaneseGlyphs]),
             Page::Mods => {
-                // The built-in multiplayer ports: not .hmod files, but this
+                // The built-in multiplayer port: not a .hmod file, but this
                 // screen is where a player looks for what the game can load
-                // (docs/e4mc.md, docs/steam-friends.md).
+                // (docs/e4mc.md).
                 let mut rows = vec![
-                    Row::Header("Built in: e4mc and Steam friends"),
-                    Row::Note(
-                        "Open the world to LAN: the e4mc address lands in chat \
-                         and Steam friends get a join button."
-                            .to_owned(),
-                    ),
+                    Row::Header("Built in: e4mc"),
+                    Row::Note("Open the world to LAN: the e4mc address lands in chat.".to_owned()),
                 ];
                 if s.mods.installed.is_empty() {
                     rows.push(Row::Header(

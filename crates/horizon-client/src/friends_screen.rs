@@ -30,8 +30,6 @@ pub struct FriendsView {
     pub notice: Option<String>,
     /// The code was just copied.
     pub copied: bool,
-    /// The Steam section (the e4steam port), when Steam sharing is offered.
-    pub steam: Option<SteamView>,
     /// The e4mc section: the world public on the relay's domain.
     pub e4mc: Option<E4mcView>,
 }
@@ -52,35 +50,12 @@ pub struct E4mcView {
     pub copied: bool,
 }
 
-/// The Steam part of the screen: the world open to a Steam lobby, joined
-/// through Steam itself with no port forwarding.
-#[derive(Clone, Debug, Default)]
-pub struct SteamView {
-    pub sharing: bool,
-    /// The world's Steam address (`steam:<lobby id>`).
-    pub address: Option<String>,
-    /// Why Steam sharing isn't serving, when the player asked for it.
-    pub problem: Option<String>,
-    /// The address was just copied.
-    pub copied: bool,
-}
-
 /// A button's action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
     Share,
     Copy,
     Stop,
-    /// Open the world to Steam friends (any of them).
-    SteamFriends,
-    /// Open the world to invited Steam friends only.
-    SteamInvitation,
-    /// Copy the Steam address.
-    SteamCopy,
-    /// Close the Steam share.
-    SteamStop,
-    /// Open the Steam overlay's invite dialog.
-    SteamInvite,
     /// Publish the world through e4mc's public relay.
     E4mcPublish,
     /// Copy the public domain.
@@ -192,82 +167,6 @@ fn layout(
             active: view.shown,
         });
     }
-    // The Steam section (the e4steam port), when Steam is signed in and it
-    // fits above the footer.
-    if let Some(steam) = &view.steam
-        && y + 70.0 <= h - 33.0
-    {
-        y += 6.0;
-        lines.push(("Steam".to_owned(), grey(), y));
-        y += 12.0;
-        if steam.sharing {
-            match &steam.address {
-                Some(address) => add(
-                    &mut lines,
-                    &format!("Friends join from a Steam invite, or the address {address}."),
-                    WHITE,
-                    &mut y,
-                ),
-                None => add(&mut lines, "Opening the Steam lobby...", WHITE, &mut y),
-            }
-            buttons.push(Button {
-                x: cx - 154.0,
-                y,
-                w: 100.0,
-                label: if steam.copied {
-                    "Copied"
-                } else {
-                    "Copy Address"
-                },
-                action: Action::SteamCopy,
-                active: steam.address.is_some(),
-            });
-            buttons.push(Button {
-                x: cx - 50.0,
-                y,
-                w: 100.0,
-                label: "Invite Friends...",
-                action: Action::SteamInvite,
-                active: true,
-            });
-            buttons.push(Button {
-                x: cx + 54.0,
-                y,
-                w: 100.0,
-                label: "Stop",
-                action: Action::SteamStop,
-                active: true,
-            });
-            y += 30.0;
-            if let Some(problem) = &steam.problem {
-                add(&mut lines, problem, WHITE, &mut y);
-            }
-        } else {
-            add(
-                &mut lines,
-                "Steam friends join with no port forwarding and no code: the world opens to a Steam lobby, and the game travels through Steam itself.",
-                WHITE,
-                &mut y,
-            );
-            buttons.push(Button {
-                x: cx - 154.0,
-                y,
-                w: 150.0,
-                label: "Open to Steam Friends",
-                action: Action::SteamFriends,
-                active: view.shown,
-            });
-            buttons.push(Button {
-                x: cx + 4.0,
-                y,
-                w: 150.0,
-                label: "Invitation Only",
-                action: Action::SteamInvitation,
-                active: view.shown,
-            });
-        }
-    }
-    // The e4mc section: the world's public domain, joinable by anyone.
     if let Some(e4mc) = &view.e4mc
         && y + 64.0 <= h - 33.0
     {
@@ -313,7 +212,7 @@ fn layout(
         } else {
             add(
                 &mut lines,
-                "Publish the world through e4mc's public relay: the address creates itself, and anyone who finds it joins, no Steam needed.",
+                "Publish the world through e4mc's public relay: the address creates itself, and anyone who finds it joins.",
                 WHITE,
                 &mut y,
             );

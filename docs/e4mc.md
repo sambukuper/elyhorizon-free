@@ -3,16 +3,12 @@
 A Horizon port of [e4mc](https://github.com/vgskye/e4mc-minecraft-architectury),
 the "Open a LAN server to anyone, anywhere, anytime" mod: the open world is
 published through e4mc's public relay and gets a public address that creates
-itself. Anyone who has it joins, even from vanilla Minecraft — no Steam, no
-port forwarding, no invitation. The implementation lives in
+itself. Anyone who has it joins, even from vanilla Minecraft — no port
+forwarding, no invitation. The implementation lives in
 `crates/horizon-e4mc`; the client's part is `game/e4mc_friends.rs` and
-`game/friends.rs`.
-
-This is the sibling of the Steam sharing
-([steam-friends.md](steam-friends.md), the e4steam port): Steam sharing is
-friends-only with per-Steam-account identity, e4mc publishing is public with
-no identity at all. Both sit on the same Play with Friends screen and both
-carry the integrated server's stream to the world's LAN port unchanged.
+`game/friends.rs`. It sits on the Play with Friends screen next to the
+invite code, and like it carries the integrated server's stream to the
+world's LAN port unchanged.
 
 ## How it works
 

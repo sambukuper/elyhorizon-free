@@ -357,16 +357,6 @@ impl Game<'_> {
         // A signed-in account always plays under its own name.
         let auth = horizon_client::auth::current();
         let name = auth.as_ref().map_or(name, |a| a.name.as_str());
-        // A Steam join plays under the name of its Steam account
-        // (horizon-steam): the host's Steam check refuses anything else.
-        #[cfg(feature = "steam")]
-        let steam_name: Option<String> = address
-            .starts_with(horizon_client::net::STEAM)
-            .then(horizon_steam::own_steam_id)
-            .flatten()
-            .map(horizon_steam::identity::safe_name);
-        #[cfg(feature = "steam")]
-        let name: &str = steam_name.as_deref().unwrap_or(name);
         let user = auth.as_ref().map_or_else(
             || {
                 (
@@ -376,18 +366,6 @@ impl Game<'_> {
             },
             |a| (a.name.clone(), a.uuid),
         );
-        // A Steam join's identity is its Steam account, not the account's.
-        #[cfg(feature = "steam")]
-        let user = if address.starts_with(horizon_client::net::STEAM)
-            && let Some(id) = horizon_steam::own_steam_id()
-        {
-            (
-                horizon_steam::identity::safe_name(id),
-                horizon_steam::identity::uuid(id),
-            )
-        } else {
-            user
-        };
         self.server_packs_connect(local.is_none().then_some(address), user);
         let session = match local {
             Some(pipe) => Session::connect_local(pipe, name, view, lang.clone()),

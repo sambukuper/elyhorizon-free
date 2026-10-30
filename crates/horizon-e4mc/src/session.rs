@@ -3,8 +3,7 @@
 //! publish the assigned domain, then bridge every stream the relay opens
 //! (one per guest) to the world's loopback port, byte for byte. e4mc's
 //! `QuiclimeSession` is the reference; the shape is the same as
-//! horizon-steam's share and horizon-friends' host: started in the
-//! background, polled by the game.
+//! horizon-friends' host: started in the background, polled by the game.
 use crate::control::{self, Clientbound, Decoder, Serverbound};
 use quinn::{Endpoint, RecvStream, SendStream};
 use std::{

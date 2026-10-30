@@ -13,7 +13,7 @@
 
 A fork of [Horizon](https://github.com/horizon-rust/horizon): Minecraft: Java Edition 26.3 rewritten in Rust, a native game that reads the same worlds, follows the same rules and generates the same terrain as the Java game. You play it through a small launcher, on files prepared from your own copy of Minecraft. It is free, open source and unofficial.
 
-The fork exists for one reason: **playing with friends**. Opening a singleplayer world to someone over the internet normally means port forwarding or a VPN. This fork ports two Minecraft mods that remove that step, wires them into the game and the launcher, and ships builds of both. Everything else behaves as upstream's does.
+The fork exists for one reason: **playing with friends**. Opening a singleplayer world to someone over the internet normally means port forwarding or a VPN. This fork ports the e4mc mod that removes that step, wires it into the game and the launcher, and ships builds of both. Everything else behaves as upstream's does.
 
 > Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft. Horizon contains no Minecraft code, assets or data: you need your own legally obtained copy of Minecraft: Java Edition 26.3.
 
@@ -24,12 +24,6 @@ The fork exists for one reason: **playing with friends**. Opening a singleplayer
 A native Rust port of [e4mc](https://modrinth.com/project/qANg5Jrr), the "open a LAN server to anyone, anywhere, anytime" mod. Pause, Open to LAN, and the world publishes itself on e4mc's public relay: the chat shows an address like `mc.e4mc.link/xxxx`, and whoever holds it joins from any client. Java players with the original e4mc mod go through the same relay, so the host and the guests don't have to run the same game. No port forwarding, no VPN, no accounts.
 
 **Play with Friends** in the pause menu carries the details: the address with a copy button, the guest count, and **Stop Publishing**. When the relay connection drops, the publisher reconnects on its own and the chat shows the fresh address; the old one dies with the session, so send the current one. That is a limit of the relay's protocol, which assigns no permanent domains.
-
-### Steam friends (the e4steam port)
-
-A native port of [e4steam](https://github.com/Kamilhik/e4steam). With Steam running, the Steam section of Play with Friends opens the world to a Steam lobby: friends get a Join button in their Steam friends list, invited friends get Steam's own invitation and join from the overlay, and the world's `steam:<lobby id>` address works in Direct Connection. Steam's P2P networking carries the game traffic, so this needs Steam on both sides and never touches the router.
-
-This part links the Steamworks SDK, so it is **not in the release binaries** (those keep to system libraries). Build from source with `--features steam`, or let [e4steam-rust's installer](https://github.com/sambukuper/e4steam-rust) do the whole job.
 
 ### Join a Friend understands addresses
 
@@ -47,12 +41,7 @@ A client build kept in the launcher's `game-mod` folder is swapped into every ve
 
 Get the launcher from [this fork's releases](https://github.com/sambukuper/elyhorizon-launcher/releases) (`fork-*` tags). Each release holds the launcher for Windows (zip) and Linux (tar.gz), and the game client for the same two systems; the game client in the releases carries the e4mc port. You need your own copy of Minecraft: Java Edition 26.3, played once, so the launcher can prepare the game's files from it (the one-time preparation uses a Java 25 runtime), and a GPU with Vulkan. Step by step: [Install and first launch](https://playhorizon.dev/docs/install).
 
-The ports also install on their own, into an existing checkout:
-
-```powershell
-# Windows: e4mc and Steam sharing, built from source
-irm https://raw.githubusercontent.com/sambukuper/e4steam-rust/main/install.ps1 | iex
-```
+The port also installs on its own, into an existing checkout:
 
 ```bash
 # Linux: e4mc from the latest release binary
@@ -74,6 +63,5 @@ Everything not described here works as upstream documents it: the [website](http
 
 - Horizon is GPLv3, and so is this fork ([LICENSE](LICENSE)).
 - [e4mc](https://modrinth.com/project/qANg5Jrr) by vgskye and contributors (MIT): the relay protocol and the flow the port reimplements.
-- [e4steam](https://github.com/Kamilhik/e4steam) by Kamilchik and K2 Studio (Apache-2.0): the Steam lobby scheme, the identity and the virtual port.
-- The ports' own repositories: [e4mc-minecraft-rust](https://github.com/sambukuper/e4mc-minecraft-rust), [e4steam-rust](https://github.com/sambukuper/e4steam-rust).
+- The port's own repository: [e4mc-minecraft-rust](https://github.com/sambukuper/e4mc-minecraft-rust).
 - Not an official Minecraft product; not affiliated with Mojang, Microsoft or Valve.
