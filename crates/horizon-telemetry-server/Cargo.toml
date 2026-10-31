@@ -2,7 +2,7 @@
 name = "horizon-telemetry-server"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-3.0-only"
+license = "AGPL-3.0-only"
 rust-version = "1.90"
 publish = false
 description = "Receives opt-in data collection batches, keeps them compactly in SQLite and serves anonymous totals"

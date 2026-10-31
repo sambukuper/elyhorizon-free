@@ -2,7 +2,7 @@
 name = "horizon-bench"
 version = "0.1.0"
 edition = "2021"
-license = "GPL-3.0-only"
+license = "AGPL-3.0-only"
 description = "The benchmark report format (docs/benchmark-report.md), shared by the game, the launcher and the upload"
 
 [dependencies]

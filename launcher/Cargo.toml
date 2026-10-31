@@ -2,7 +2,7 @@
 name = "elyhorizon-launcher"
 version = "0.3.0"
 edition = "2021"
-license = "GPL-3.0-only"
+license = "AGPL-3.0-only"
 description = "Downloads, prepares and starts ElyHorizon builds"
 
 [workspace]

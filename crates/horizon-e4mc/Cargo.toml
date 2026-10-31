@@ -2,7 +2,7 @@
 name = "horizon-e4mc"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-3.0-only"
+license = "AGPL-3.0-only"
 description = "Open the world to anyone, anywhere: e4mc's public relay ported to Horizon (a QUIC session with the relay carries the invite domain, its streams carry the guests)"
 
 [dependencies]

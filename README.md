@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/vanilla%20parity-100%25-F0795A" alt="Vanilla parity 100%">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-2A2470" alt="Windows and Linux">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-3B2F7E" alt="GNU GPL v3 licence"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPLv3-3B2F7E" alt="GNU AGPL v3 licence"></a>
 </p>
 
 # ElyHorizon
@@ -96,7 +96,7 @@ Skins served over https show the default skin unless already cached; pack icons 
 
 ## License and credits
 
-- Horizon is GPLv3, and so is this fork ([LICENSE](LICENSE)).
+- Horizon's original work is MIT (kept as [LICENSE-MIT](LICENSE-MIT)). This fork is offered under the GNU AGPL v3 ([LICENSE](LICENSE)): the same freedoms, plus the requirement to share the source when a modified build serves users over a network.
 - [e4mc](https://modrinth.com/project/qANg5Jrr) by vgskye and contributors (MIT): the relay protocol and the flow the port reimplements.
-- The port's own repository: [e4mc-minecraft-rust](https://github.com/sambukuper/e4mc-minecraft-rust).
+- The port's own repository: [e4mc-minecraft-rust](https://github.com/sambukuper/e4mc-minecraft-rust) (MIT).
 - Not an official Minecraft product; not affiliated with Mojang, Microsoft or Valve.
